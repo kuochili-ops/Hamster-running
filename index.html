@@ -1,0 +1,1208 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D 倉鼠透明球跑步模擬</title>
+  <!-- 載入 Tailwind CSS 以快速建構現代化浮動控制面板 -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- 載入 Google Fonts Noto Sans TC 與 Inter 字體 -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet" />
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Noto Sans TC', 'Inter', sans-serif;
+      background-color: #f6efe6;
+    }
+    #canvas-container {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+    }
+    /* 自訂滑桿樣式 */
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      height: 6px;
+      background: #e5d7c6;
+      border-radius: 999px;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #d97706;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(217, 119, 6, 0.4);
+      transition: transform 0.15s ease;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+    }
+    /* 毛玻璃面板微調 */
+    .glass-panel {
+      background: rgba(255, 252, 247, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.7);
+      box-shadow: 0 12px 32px rgba(92, 64, 38, 0.12);
+    }
+  </style>
+
+  <!-- 透過 ES Module Importmap 載入 Three.js 與 OrbitControls -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <!-- 3D 畫布容器 -->
+  <div id="canvas-container"></div>
+
+  <!-- 左上角標題與狀態提示 -->
+  <div class="fixed top-4 left-4 z-10 pointer-events-none flex flex-col gap-2 max-w-[calc(100vw-2rem)] sm:max-w-xs">
+    <div class="glass-panel rounded-2xl px-4 py-3 pointer-events-auto">
+      <div class="flex items-center gap-2.5">
+        <span class="text-2xl">🐹</span>
+        <div>
+          <h1 class="text-base sm:text-lg font-bold text-amber-950 leading-tight">倉鼠透明球模擬器</h1>
+          <p id="status-text" class="text-xs text-amber-800/80 mt-0.5">正在房間裡開心地四處探索...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 鍵盤操作提示氣泡 (手動模式時顯示) -->
+    <div id="manual-hint" class="hidden glass-panel rounded-xl px-3.5 py-2 text-xs text-amber-900 pointer-events-auto">
+      <div class="font-semibold mb-1">⌨️ 操作說明：</div>
+      <div>使用 <span class="px-1.5 py-0.5 bg-amber-200/80 rounded font-mono font-bold">W A S D</span> 或 <span class="px-1.5 py-0.5 bg-amber-200/80 rounded font-mono font-bold">方向鍵</span> 控制倉鼠奔跑方向！</div>
+    </div>
+  </div>
+
+  <!-- 手機版虛擬方向鍵 (僅在手動模式且小螢幕或觸控裝置方便使用) -->
+  <div id="touch-dpad" class="hidden fixed bottom-4 left-4 z-10 grid grid-cols-3 gap-1.5 w-32 h-32 sm:hidden">
+    <div></div>
+    <button data-key="ArrowUp" class="dpad-btn glass-panel rounded-xl flex items-center justify-center text-amber-900 font-bold active:bg-amber-200">▲</button>
+    <div></div>
+    <button data-key="ArrowLeft" class="dpad-btn glass-panel rounded-xl flex items-center justify-center text-amber-900 font-bold active:bg-amber-200">◀</button>
+    <button data-key="ArrowDown" class="dpad-btn glass-panel rounded-xl flex items-center justify-center text-amber-900 font-bold active:bg-amber-200">▼</button>
+    <button data-key="ArrowRight" class="dpad-btn glass-panel rounded-xl flex items-center justify-center text-amber-900 font-bold active:bg-amber-200">▶</button>
+  </div>
+
+  <!-- 右上/右下 控制面板收合按鈕與主面板 -->
+  <div class="fixed top-4 right-4 z-10 flex flex-col items-end gap-2 max-w-[calc(100vw-2rem)]">
+    <button id="toggle-panel-btn" class="glass-panel rounded-full px-3.5 py-2 text-xs font-semibold text-amber-950 hover:bg-white transition flex items-center gap-1.5 shadow-sm">
+      <span>⚙️</span>
+      <span id="toggle-panel-label">隱藏控制</span>
+    </button>
+
+    <div id="control-panel" class="glass-panel rounded-2xl p-4 w-72 sm:w-80 flex flex-col gap-3.5 text-sm text-amber-950 transition-all duration-200">
+      <!-- 模式切換 -->
+      <div>
+        <label class="block text-xs font-bold text-amber-900/80 mb-1.5">控制模式</label>
+        <div class="grid grid-cols-2 gap-1.5 bg-amber-900/10 p-1 rounded-xl">
+          <button id="btn-mode-auto" class="py-1.5 px-2 rounded-lg text-xs font-bold bg-amber-600 text-white shadow-sm transition">
+            自動探索
+          </button>
+          <button id="btn-mode-manual" class="py-1.5 px-2 rounded-lg text-xs font-bold text-amber-900 hover:bg-white/60 transition">
+            鍵盤控制
+          </button>
+        </div>
+      </div>
+
+      <!-- 視角切換 -->
+      <div>
+        <label class="block text-xs font-bold text-amber-900/80 mb-1.5">鏡頭視角</label>
+        <div class="grid grid-cols-2 gap-1.5 bg-amber-900/10 p-1 rounded-xl">
+          <button id="btn-cam-follow" class="py-1.5 px-2 rounded-lg text-xs font-bold bg-amber-600 text-white shadow-sm transition">
+            跟隨視角
+          </button>
+          <button id="btn-cam-free" class="py-1.5 px-2 rounded-lg text-xs font-bold text-amber-900 hover:bg-white/60 transition">
+            自由視角
+          </button>
+        </div>
+      </div>
+
+      <!-- 跑步速度滑桿 -->
+      <div>
+        <div class="flex justify-between items-center mb-1">
+          <label for="speed-slider" class="text-xs font-bold text-amber-900/80">跑步速度</label>
+          <span id="speed-value" class="text-xs font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">1.0x</span>
+        </div>
+        <input id="speed-slider" type="range" min="0.2" max="2.5" step="0.1" value="1.0" class="w-full" />
+      </div>
+
+      <!-- 透明球顏色選擇 -->
+      <div>
+        <label class="block text-xs font-bold text-amber-900/80 mb-1.5">滾球色調</label>
+        <div class="grid grid-cols-4 gap-2">
+          <button data-color="clear" class="color-btn flex flex-col items-center gap-1 p-1.5 rounded-xl border-2 border-amber-600 bg-white/80 transition">
+            <span class="w-5 h-5 rounded-full border border-gray-300 bg-gradient-to-tr from-gray-100 to-white shadow-inner"></span>
+            <span class="text-[11px] font-medium">透明原色</span>
+          </button>
+          <button data-color="pink" class="color-btn flex flex-col items-center gap-1 p-1.5 rounded-xl border-2 border-transparent hover:bg-white/60 transition">
+            <span class="w-5 h-5 rounded-full border border-pink-300 bg-gradient-to-tr from-pink-300 to-pink-100 shadow-inner"></span>
+            <span class="text-[11px] font-medium">粉紅</span>
+          </button>
+          <button data-color="blue" class="color-btn flex flex-col items-center gap-1 p-1.5 rounded-xl border-2 border-transparent hover:bg-white/60 transition">
+            <span class="w-5 h-5 rounded-full border border-sky-300 bg-gradient-to-tr from-sky-300 to-sky-100 shadow-inner"></span>
+            <span class="text-[11px] font-medium">天藍</span>
+          </button>
+          <button data-color="mint" class="color-btn flex flex-col items-center gap-1 p-1.5 rounded-xl border-2 border-transparent hover:bg-white/60 transition">
+            <span class="w-5 h-5 rounded-full border border-emerald-300 bg-gradient-to-tr from-emerald-300 to-emerald-100 shadow-inner"></span>
+            <span class="text-[11px] font-medium">薄荷綠</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 丟葵花籽互動按鈕 -->
+      <div class="pt-1 border-t border-amber-900/10 flex flex-col gap-2">
+        <button id="btn-drop-seed" class="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 active:scale-[0.98] text-white font-bold text-sm shadow-md shadow-amber-500/25 transition flex items-center justify-center gap-2">
+          <span>🌻</span>
+          <span>丟葵花籽</span>
+          <span id="seed-count-badge" class="ml-1 text-xs bg-white/25 px-2 py-0.5 rounded-full">場上: 0</span>
+        </button>
+        <p class="text-[11px] text-center text-amber-800/70">提示：可拖曳滑鼠旋轉視角、滾輪縮放</p>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    // ==========================================
+    // 1. 全域狀態與模擬參數設定
+    // ==========================================
+    const CONFIG = {
+      ballRadius: 1.35,          // 透明球半徑
+      arenaHalfSize: 13.5,       // 房間地板半寬 (總寬 27x27)
+      baseSpeed: 5.2,            // 基礎移動速度 (單位/秒)
+      speedMultiplier: 1.0,      // 速度滑桿倍率
+      mode: 'auto',              // 'auto' | 'manual'
+      cameraMode: 'follow',      // 'follow' | 'free'
+      ballColor: 'clear'         // 'clear' | 'pink' | 'blue' | 'mint'
+    };
+
+    const BALL_THEMES = {
+      clear: { color: 0xffffff, attenuation: 0xf4f9ff, ring: 0xdbeafe, opacity: 0.34 },
+      pink:  { color: 0xffb7d5, attenuation: 0xff85b3, ring: 0xf472b6, opacity: 0.42 },
+      blue:  { color: 0x93c5fd, attenuation: 0x60a5fa, ring: 0x38bdf8, opacity: 0.42 },
+      mint:  { color: 0x86efac, attenuation: 0x4ade80, ring: 0x34d399, opacity: 0.42 }
+    };
+
+    // 物理與動畫狀態
+    const simState = {
+      position: new THREE.Vector3(0, CONFIG.ballRadius, 0),
+      velocity: new THREE.Vector3(3.2, 0, 2.1),
+      facingAngle: Math.atan2(3.2, 2.1),
+      wanderTarget: new THREE.Vector3(5, 0, 5),
+      wanderTimer: 0,
+      runCycle: 0,
+      currentSpeed: 0,
+      forwardTilt: 0,
+      bankAngle: 0,
+      eatPauseTimer: 0,
+      happyHopTimer: 0
+    };
+
+    // 鍵盤按鍵狀態
+    const keys = {
+      ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false,
+      KeyW: false, KeyS: false, KeyA: false, KeyD: false
+    };
+
+    // 場上的葵花籽陣列
+    const sunflowerSeeds = [];
+
+    // ==========================================
+    // 2. 初始化 Three.js 場景、相機與渲染器
+    // ==========================================
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf5ebe0);
+    scene.fog = new THREE.FogExp2(0xf5ebe0, 0.016);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 120);
+    camera.position.set(0, 6.5, 11.5);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.08;
+    container.appendChild(renderer.domElement);
+
+    // 軌道控制器 (OrbitControls)
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.maxPolarAngle = Math.PI / 2 - 0.04; // 防止相機鑽入地板下
+    controls.minDistance = 3.2;
+    controls.maxDistance = 28;
+    controls.target.set(0, CONFIG.ballRadius, 0);
+
+    // ==========================================
+    // 3. 溫馨室內燈光與環境建立
+    // ==========================================
+    function setupLighting() {
+      // 柔和半球光 (模擬天花板暖光與木地板反射)
+      const hemiLight = new THREE.HemisphereLight(0xfffaf0, 0xd4a373, 0.95);
+      hemiLight.position.set(0, 20, 0);
+      scene.add(hemiLight);
+
+      // 窗邊灑落的溫暖陽光 (主陰影光源)
+      const dirLight = new THREE.DirectionalLight(0xfff3dc, 1.85);
+      dirLight.position.set(12, 18, 10);
+      dirLight.castShadow = true;
+      dirLight.shadow.mapSize.width = 2048;
+      dirLight.shadow.mapSize.height = 2048;
+      dirLight.shadow.camera.near = 2;
+      dirLight.shadow.camera.far = 48;
+      const shadowBound = 17;
+      dirLight.shadow.camera.left = -shadowBound;
+      dirLight.shadow.camera.right = shadowBound;
+      dirLight.shadow.camera.top = shadowBound;
+      dirLight.shadow.camera.bottom = -shadowBound;
+      dirLight.shadow.bias = -0.0005;
+      scene.add(dirLight);
+
+      // 補光燈 (讓透明球高光更晶瑩剔透)
+      const rimLight = new THREE.DirectionalLight(0xe0f2fe, 0.65);
+      rimLight.position.set(-10, 8, -10);
+      scene.add(rimLight);
+    }
+
+    // 程式化生成溫馨木地板紋理
+    function createWoodFloorTexture() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1024;
+      canvas.height = 1024;
+      const ctx = canvas.getContext('2d');
+
+      // 底色
+      ctx.fillStyle = '#d5a87a';
+      ctx.fillRect(0, 0, 1024, 1024);
+
+      const rows = 8;
+      const rowHeight = 1024 / rows;
+      const tones = ['#cfa070', '#d8ac7e', '#c69564', '#dfb589', '#caa074'];
+
+      for (let r = 0; r < rows; r++) {
+        const y = r * rowHeight;
+        ctx.fillStyle = tones[r % tones.length];
+        ctx.fillRect(0, y, 1024, rowHeight);
+
+        // 木紋細線
+        ctx.strokeStyle = 'rgba(120, 72, 30, 0.14)';
+        ctx.lineWidth = 1.5;
+        for (let i = 0; i < 14; i++) {
+          ctx.beginPath();
+          const lineY = y + (i / 14) * rowHeight;
+          ctx.moveTo(0, lineY);
+          ctx.bezierCurveTo(340, lineY + Math.sin(r + i) * 4, 680, lineY - Math.cos(r + i) * 4, 1024, lineY);
+          ctx.stroke();
+        }
+
+        // 木板水平接縫
+        ctx.fillStyle = 'rgba(92, 54, 22, 0.35)';
+        ctx.fillRect(0, y, 1024, 2.5);
+
+        // 木板垂直接縫 (交錯排列)
+        const offset = (r % 2) * 256;
+        ctx.fillRect(offset + 256, y, 2.5, rowHeight);
+        ctx.fillRect(offset + 768, y, 2.5, rowHeight);
+      }
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      texture.repeat.set(4, 4);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      return texture;
+    }
+
+    function setupEnvironment() {
+      // 1. 木地板
+      const floorGeo = new THREE.PlaneGeometry(CONFIG.arenaHalfSize * 2, CONFIG.arenaHalfSize * 2);
+      const floorMat = new THREE.MeshStandardMaterial({
+        map: createWoodFloorTexture(),
+        roughness: 0.62,
+        metalness: 0.05
+      });
+      const floor = new THREE.Mesh(floorGeo, floorMat);
+      floor.rotation.x = -Math.PI / 2;
+      floor.receiveShadow = true;
+      scene.add(floor);
+
+      // 2. 房間中央圓形編織小地毯 (增加視覺參考點與溫馨感)
+      const rugGeo = new THREE.CylinderGeometry(4.2, 4.2, 0.03, 48);
+      const rugMat = new THREE.MeshStandardMaterial({
+        color: 0xfef3c7,
+        roughness: 0.9
+      });
+      const rug = new THREE.Mesh(rugGeo, rugMat);
+      rug.position.y = 0.015;
+      rug.receiveShadow = true;
+      scene.add(rug);
+
+      const rugBorderGeo = new THREE.RingGeometry(3.75, 4.05, 48);
+      const rugBorderMat = new THREE.MeshStandardMaterial({
+        color: 0xf59e0b,
+        roughness: 0.85,
+        side: THREE.DoubleSide
+      });
+      const rugBorder = new THREE.Mesh(rugBorderGeo, rugBorderMat);
+      rugBorder.rotation.x = -Math.PI / 2;
+      rugBorder.position.y = 0.032;
+      rugBorder.receiveShadow = true;
+      scene.add(rugBorder);
+
+      // 3. 四周溫馨白色踢腳板圍牆 (讓滾球可以反彈)
+      const wallHeight = 1.1;
+      const wallThickness = 0.45;
+      const fullSpan = CONFIG.arenaHalfSize * 2 + wallThickness * 2;
+      const wallMat = new THREE.MeshStandardMaterial({
+        color: 0xfffaf2,
+        roughness: 0.55
+      });
+      const trimMat = new THREE.MeshStandardMaterial({
+        color: 0xe6ccb2,
+        roughness: 0.5
+      });
+
+      const wallConfigs = [
+        { w: fullSpan, d: wallThickness, x: 0, z: -CONFIG.arenaHalfSize - wallThickness / 2 },
+        { w: fullSpan, d: wallThickness, x: 0, z: CONFIG.arenaHalfSize + wallThickness / 2 },
+        { w: wallThickness, d: fullSpan, x: -CONFIG.arenaHalfSize - wallThickness / 2, z: 0 },
+        { w: wallThickness, d: fullSpan, x: CONFIG.arenaHalfSize + wallThickness / 2, z: 0 }
+      ];
+
+      wallConfigs.forEach(cfg => {
+        const wall = new THREE.Mesh(new THREE.BoxGeometry(cfg.w, wallHeight, cfg.d), wallMat);
+        wall.position.set(cfg.x, wallHeight / 2, cfg.z);
+        wall.castShadow = true;
+        wall.receiveShadow = true;
+        scene.add(wall);
+
+        // 頂部木質飾條
+        const trim = new THREE.Mesh(new THREE.BoxGeometry(cfg.w + 0.04, 0.12, cfg.d + 0.04), trimMat);
+        trim.position.set(cfg.x, wallHeight + 0.04, cfg.z);
+        trim.castShadow = true;
+        scene.add(trim);
+      });
+
+      // 4. 角落裝飾小物：彩色積木與迷你食盆
+      const blockColors = [0xfca5a5, 0x93c5fd, 0xfde047, 0x86efac];
+      const cornerOffsets = [
+        { x: -11.5, z: -11.5 },
+        { x: 11.5, z: -11.5 },
+        { x: -11.5, z: 11.5 }
+      ];
+      cornerOffsets.forEach((pos, idx) => {
+        const box1 = new THREE.Mesh(
+          new THREE.BoxGeometry(1.1, 1.1, 1.1),
+          new THREE.MeshStandardMaterial({ color: blockColors[idx], roughness: 0.4 })
+        );
+        box1.position.set(pos.x, 0.55, pos.z);
+        box1.rotation.y = 0.3 * (idx + 1);
+        box1.castShadow = true;
+        box1.receiveShadow = true;
+        scene.add(box1);
+
+        const box2 = new THREE.Mesh(
+          new THREE.BoxGeometry(0.75, 0.75, 0.75),
+          new THREE.MeshStandardMaterial({ color: blockColors[(idx + 1) % 4], roughness: 0.4 })
+        );
+        box2.position.set(pos.x + 0.1, 1.475, pos.z - 0.05);
+        box2.rotation.y = -0.4;
+        box2.castShadow = true;
+        scene.add(box2);
+      });
+    }
+
+    // ==========================================
+    // 4. 建立透明倉鼠滾球 (含接合環與透氣孔條紋)
+    // ==========================================
+    let ballGroup, ballShellMat, ballRingMat, ballVentMat;
+
+    function createHamsterBall() {
+      ballGroup = new THREE.Group();
+      ballGroup.position.copy(simState.position);
+      scene.add(ballGroup);
+
+      const r = CONFIG.ballRadius;
+
+      // 1. 高光澤透明球殼
+      const sphereGeo = new THREE.SphereGeometry(r, 48, 36);
+      ballShellMat = new THREE.MeshPhysicalMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.34,
+        roughness: 0.06,
+        metalness: 0.0,
+        ior: 1.48,
+        reflectivity: 0.9,
+        clearcoat: 1.0,
+        clearcoatRoughness: 0.05,
+        depthWrite: false, // 確保內部倉鼠清晰不被遮擋
+        side: THREE.DoubleSide
+      });
+      const sphereMesh = new THREE.Mesh(sphereGeo, ballShellMat);
+      sphereMesh.castShadow = true;
+      ballGroup.add(sphereMesh);
+
+      // 2. 赤道接合卡榫環 (讓滾動方向一目了然)
+      ballRingMat = new THREE.MeshStandardMaterial({
+        color: 0xdbeafe,
+        roughness: 0.25,
+        metalness: 0.1,
+        transparent: true,
+        opacity: 0.82
+      });
+      const equatorRing = new THREE.Mesh(new THREE.TorusGeometry(r * 1.003, 0.032, 12, 64), ballRingMat);
+      ballGroup.add(equatorRing);
+
+      // 3. 兩側蓋子圓環與弧形透氣孔條紋 (強化滾動視覺線索)
+      ballVentMat = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        roughness: 0.2,
+        transparent: true,
+        opacity: 0.65
+      });
+
+      [-1, 1].forEach(side => {
+        const capRing = new THREE.Mesh(new THREE.TorusGeometry(r * 0.46, 0.024, 10, 36), ballRingMat);
+        capRing.position.z = side * r * 0.885;
+        ballGroup.add(capRing);
+      });
+
+      // 球面上的細緻透氣肋條 (12條經線短弧)
+      for (let i = 0; i < 12; i++) {
+        const angle = (i / 12) * Math.PI * 2;
+        const ribGeo = new THREE.TorusGeometry(r * 1.001, 0.012, 6, 20, Math.PI * 0.28);
+        const rib = new THREE.Mesh(ribGeo, ballVentMat);
+        rib.rotation.y = angle;
+        rib.rotation.z = -Math.PI * 0.14;
+        ballGroup.add(rib);
+      }
+    }
+
+    // ==========================================
+    // 5. 建立超可愛 3D 黃金鼠角色 (含四肢奔跑骨架)
+    // ==========================================
+    const hamsterRig = {
+      root: null,       // 跟隨球心位置
+      tiltPivot: null,  // 處理轉向、前傾與側傾
+      bodyGroup: null,  // 處理身體上下彈跳
+      headGroup: null,  // 頭部與耳朵、鬍鬚
+      earL: null,
+      earR: null,
+      whiskersL: [],
+      whiskersR: [],
+      legFL: null,      // 左前腳
+      legFR: null,      // 右前腳
+      legBL: null,      // 左後腳
+      legBR: null,      // 右後腳
+      tail: null
+    };
+
+    function createCuteHamster() {
+      hamsterRig.root = new THREE.Group();
+      scene.add(hamsterRig.root);
+
+      hamsterRig.tiltPivot = new THREE.Group();
+      hamsterRig.root.add(hamsterRig.tiltPivot);
+
+      // 計算倉鼠在球體底部的基準高度 (球心在 y=0 相對 root)
+      // 球半徑 1.35，腳掌貼近 -1.26 處
+      hamsterRig.bodyGroup = new THREE.Group();
+      hamsterRig.bodyGroup.position.set(0, -CONFIG.ballRadius + 0.44, 0);
+      hamsterRig.tiltPivot.add(hamsterRig.bodyGroup);
+
+      // 材質定義
+      const goldenFurMat = new THREE.MeshStandardMaterial({ color: 0xe3964a, roughness: 0.78 });
+      const whiteFurMat  = new THREE.MeshStandardMaterial({ color: 0xfffaf3, roughness: 0.8 });
+      const pinkSkinMat  = new THREE.MeshStandardMaterial({ color: 0xffa8b8, roughness: 0.55 });
+      const earInnerMat  = new THREE.MeshStandardMaterial({ color: 0xf48fb1, roughness: 0.65 });
+      const eyeMat       = new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.1, metalness: 0.2 });
+      const whiskerMat   = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 });
+
+      // 1. 圓滾滾的身體 (黃金色背部 + 白色肚皮)
+      const torsoGeo = new THREE.SphereGeometry(0.42, 28, 24);
+      torsoGeo.scale(0.95, 0.88, 1.28);
+      const torso = new THREE.Mesh(torsoGeo, goldenFurMat);
+      torso.castShadow = true;
+      hamsterRig.bodyGroup.add(torso);
+
+      // 白色毛茸茸肚皮
+      const bellyGeo = new THREE.SphereGeometry(0.38, 24, 20);
+      bellyGeo.scale(0.88, 0.72, 1.18);
+      const belly = new THREE.Mesh(bellyGeo, whiteFurMat);
+      belly.position.set(0, -0.1, 0.03);
+      hamsterRig.bodyGroup.add(belly);
+
+      // 2. 可愛小尾巴
+      const tailGeo = new THREE.SphereGeometry(0.085, 14, 14);
+      hamsterRig.tail = new THREE.Mesh(tailGeo, whiteFurMat);
+      hamsterRig.tail.position.set(0, 0.04, -0.54);
+      hamsterRig.bodyGroup.add(hamsterRig.tail);
+
+      // 3. 頭部群組 (位於身體前方 +Z 方向)
+      hamsterRig.headGroup = new THREE.Group();
+      hamsterRig.headGroup.position.set(0, 0.12, 0.44);
+      hamsterRig.bodyGroup.add(hamsterRig.headGroup);
+
+      // 頭顱
+      const headGeo = new THREE.SphereGeometry(0.32, 26, 22);
+      headGeo.scale(1.06, 0.96, 1.02);
+      const head = new THREE.Mesh(headGeo, goldenFurMat);
+      head.castShadow = true;
+      hamsterRig.headGroup.add(head);
+
+      // 白色口鼻吻部
+      const snoutGeo = new THREE.SphereGeometry(0.17, 20, 16);
+      snoutGeo.scale(1.15, 0.85, 0.95);
+      const snout = new THREE.Mesh(snoutGeo, whiteFurMat);
+      snout.position.set(0, -0.06, 0.24);
+      hamsterRig.headGroup.add(snout);
+
+      // 鼓鼓的腮幫子 (左右各一顆，倉鼠靈魂特徵！)
+      [-1, 1].forEach(side => {
+        const cheekGeo = new THREE.SphereGeometry(0.145, 18, 16);
+        cheekGeo.scale(1.05, 0.9, 0.95);
+        const cheek = new THREE.Mesh(cheekGeo, whiteFurMat);
+        cheek.position.set(side * 0.21, -0.07, 0.15);
+        hamsterRig.headGroup.add(cheek);
+
+        // 腮紅小點
+        const blushGeo = new THREE.SphereGeometry(0.045, 12, 12);
+        blushGeo.scale(1, 0.7, 0.4);
+        const blush = new THREE.Mesh(blushGeo, pinkSkinMat);
+        blush.position.set(side * 0.24, -0.02, 0.24);
+        hamsterRig.headGroup.add(blush);
+      });
+
+      // 粉紅小鼻子
+      const noseGeo = new THREE.SphereGeometry(0.042, 14, 14);
+      noseGeo.scale(1.2, 0.9, 0.9);
+      const nose = new THREE.Mesh(noseGeo, pinkSkinMat);
+      nose.position.set(0, -0.02, 0.39);
+      hamsterRig.headGroup.add(nose);
+
+      // 水汪汪黑眼睛 + 白色反光點
+      [-1, 1].forEach(side => {
+        const eye = new THREE.Mesh(new THREE.SphereGeometry(0.052, 16, 16), eyeMat);
+        eye.position.set(side * 0.16, 0.08, 0.26);
+        hamsterRig.headGroup.add(eye);
+
+        const glint = new THREE.Mesh(
+          new THREE.SphereGeometry(0.017, 10, 10),
+          new THREE.MeshBasicMaterial({ color: 0xffffff })
+        );
+        glint.position.set(side * 0.15, 0.10, 0.302);
+        hamsterRig.headGroup.add(glint);
+      });
+
+      // 圓圓的小耳朵
+      function buildEar(side) {
+        const earPivot = new THREE.Group();
+        earPivot.position.set(side * 0.22, 0.25, -0.02);
+        earPivot.rotation.z = -side * 0.38;
+        earPivot.rotation.x = -0.15;
+
+        const outerEar = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.035, 18), goldenFurMat);
+        outerEar.rotation.x = Math.PI / 2;
+        earPivot.add(outerEar);
+
+        const innerEar = new THREE.Mesh(new THREE.CylinderGeometry(0.068, 0.068, 0.038, 16), earInnerMat);
+        innerEar.rotation.x = Math.PI / 2;
+        innerEar.position.z = 0.005;
+        earPivot.add(innerEar);
+
+        hamsterRig.headGroup.add(earPivot);
+        return earPivot;
+      }
+      hamsterRig.earL = buildEar(1);
+      hamsterRig.earR = buildEar(-1);
+
+      // 精緻小鬍鬚 (左右各 3 根)
+      [-1, 1].forEach(side => {
+        for (let i = 0; i < 3; i++) {
+          const wGeo = new THREE.CylinderGeometry(0.004, 0.002, 0.22, 6);
+          wGeo.rotateZ(Math.PI / 2);
+          const whisker = new THREE.Mesh(wGeo, whiskerMat);
+          whisker.position.set(side * 0.22, -0.04 + (i - 1) * 0.025, 0.31);
+          whisker.rotation.y = side * (0.25 + (i - 1) * 0.12);
+          whisker.rotation.z = side * (i - 1) * 0.12;
+          hamsterRig.headGroup.add(whisker);
+          if (side === 1) hamsterRig.whiskersL.push(whisker);
+          else hamsterRig.whiskersR.push(whisker);
+        }
+      });
+
+      // 4. 四隻小短腿與粉紅肉球腳掌
+      function buildLeg(x, z) {
+        const legPivot = new THREE.Group();
+        legPivot.position.set(x, -0.22, z);
+
+        // 毛茸茸大腿
+        const thigh = new THREE.Mesh(new THREE.SphereGeometry(0.095, 14, 14), whiteFurMat);
+        thigh.scale.set(0.9, 1.2, 0.9);
+        thigh.position.set(0, -0.05, 0);
+        legPivot.add(thigh);
+
+        // 粉紅小腳掌
+        const paw = new THREE.Mesh(new THREE.SphereGeometry(0.068, 14, 14), pinkSkinMat);
+        paw.scale.set(1.05, 0.65, 1.35);
+        paw.position.set(0, -0.14, 0.04);
+        legPivot.add(paw);
+
+        hamsterRig.bodyGroup.add(legPivot);
+        return legPivot;
+      }
+
+      hamsterRig.legFL = buildLeg(0.21, 0.25);
+      hamsterRig.legFR = buildLeg(-0.21, 0.25);
+      hamsterRig.legBL = buildLeg(0.22, -0.26);
+      hamsterRig.legBR = buildLeg(-0.22, -0.26);
+    }
+
+    // ==========================================
+    // 6. 葵花籽生成與吃掉特效
+    // ==========================================
+    const seedShellGeo = new THREE.SphereGeometry(0.16, 14, 12);
+    seedShellGeo.scale(0.65, 0.42, 1.45);
+    const seedMat = new THREE.MeshStandardMaterial({
+      color: 0x3f3a36,
+      roughness: 0.45
+    });
+    const seedStripeMat = new THREE.MeshStandardMaterial({
+      color: 0xfef3c7,
+      roughness: 0.5
+    });
+
+    function spawnSunflowerSeed(customPos = null) {
+      const seedGroup = new THREE.Group();
+
+      const body = new THREE.Mesh(seedShellGeo, seedMat);
+      body.castShadow = true;
+      seedGroup.add(body);
+
+      // 葵花籽白色條紋裝飾
+      const stripeGeo = new THREE.SphereGeometry(0.163, 12, 10);
+      stripeGeo.scale(0.28, 0.44, 1.38);
+      const stripe = new THREE.Mesh(stripeGeo, seedStripeMat);
+      seedGroup.add(stripe);
+
+      // 隨機位置或指定位置 (避開最邊緣牆壁)
+      const safeLimit = CONFIG.arenaHalfSize - 2.2;
+      let x, z;
+      if (customPos) {
+        x = THREE.MathUtils.clamp(customPos.x, -safeLimit, safeLimit);
+        z = THREE.MathUtils.clamp(customPos.z, -safeLimit, safeLimit);
+      } else {
+        // 盡量丟在離倉鼠有一點距離但看得到的地方
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 3.5 + Math.random() * 6.5;
+        x = THREE.MathUtils.clamp(simState.position.x + Math.cos(angle) * dist, -safeLimit, safeLimit);
+        z = THREE.MathUtils.clamp(simState.position.z + Math.sin(angle) * dist, -safeLimit, safeLimit);
+      }
+
+      seedGroup.position.set(x, 0.08, z);
+      seedGroup.rotation.y = Math.random() * Math.PI * 2;
+      scene.add(seedGroup);
+
+      sunflowerSeeds.push({
+        mesh: seedGroup,
+        position: new THREE.Vector3(x, 0, z),
+        spawnTime: performance.now()
+      });
+
+      updateSeedBadge();
+    }
+
+    function updateSeedBadge() {
+      const badge = document.getElementById('seed-count-badge');
+      if (badge) {
+        badge.textContent = `場上: ${sunflowerSeeds.length}`;
+      }
+    }
+
+    // ==========================================
+    // 7. 物理移動、無滑動滾球旋轉與倉鼠步態更新
+    // ==========================================
+    const tempAxis = new THREE.Vector3();
+    const tempQuat = new THREE.Quaternion();
+    const upVec = new THREE.Vector3(0, 1, 0);
+
+    function pickNewWanderTarget() {
+      const limit = CONFIG.arenaHalfSize - CONFIG.ballRadius - 1.2;
+      simState.wanderTarget.set(
+        (Math.random() * 2 - 1) * limit,
+        0,
+        (Math.random() * 2 - 1) * limit
+      );
+      simState.wanderTimer = 2.2 + Math.random() * 2.8;
+    }
+
+    function updateSimulation(dt, elapsedTime) {
+      const statusText = document.getElementById('status-text');
+
+      // 如果剛吃到葵花籽，開心地小停頓並跳躍慶祝
+      if (simState.eatPauseTimer > 0) {
+        simState.eatPauseTimer -= dt;
+        simState.happyHopTimer += dt * 18;
+        simState.currentSpeed = THREE.MathUtils.lerp(simState.currentSpeed, 0, dt * 10);
+        if (statusText) statusText.textContent = '😋 喀滋喀滋！吃到香噴噴的葵花籽啦！';
+      } else {
+        // 決定期望移動方向與目標速度
+        const desiredDir = new THREE.Vector3();
+        let targetSpeed = CONFIG.baseSpeed * CONFIG.speedMultiplier;
+
+        // 檢查場上是否有葵花籽 (自動與手動模式下只要附近有葵花籽都能吸引，自動模式會主動衝過去)
+        let nearestSeed = null;
+        let minSeedDist = Infinity;
+        for (let i = 0; i < sunflowerSeeds.length; i++) {
+          const d = Math.hypot(
+            sunflowerSeeds[i].position.x - simState.position.x,
+            sunflowerSeeds[i].position.z - simState.position.z
+          );
+          if (d < minSeedDist) {
+            minSeedDist = d;
+            nearestSeed = sunflowerSeeds[i];
+          }
+        }
+
+        if (CONFIG.mode === 'manual') {
+          // 鍵盤方向控制 (相對於目前相機水平朝向，操作最直覺！)
+          const camForward = new THREE.Vector3();
+          camera.getWorldDirection(camForward);
+          camForward.y = 0;
+          if (camForward.lengthSq() < 0.0001) camForward.set(0, 0, -1);
+          camForward.normalize();
+
+          const camRight = new THREE.Vector3().crossVectors(camForward, upVec).normalize();
+
+          if (keys.KeyW || keys.ArrowUp) desiredDir.add(camForward);
+          if (keys.KeyS || keys.ArrowDown) desiredDir.sub(camForward);
+          if (keys.KeyD || keys.ArrowRight) desiredDir.add(camRight);
+          if (keys.KeyA || keys.ArrowLeft) desiredDir.sub(camRight);
+
+          if (desiredDir.lengthSq() > 0) {
+            desiredDir.normalize();
+            if (statusText) statusText.textContent = '🎮 手動駕駛中：全力衝刺！';
+          } else {
+            targetSpeed = 0;
+            if (statusText) statusText.textContent = '🐹 待命中：按 WASD 或方向鍵開始跑步';
+          }
+        } else {
+          // 自動探索模式：優先尋找葵花籽！
+          if (nearestSeed) {
+            desiredDir.set(
+              nearestSeed.position.x - simState.position.x,
+              0,
+              nearestSeed.position.z - simState.position.z
+            ).normalize();
+            targetSpeed *= 1.32; // 看到葵花籽興奮加速！
+            if (statusText) statusText.textContent = '🌻 發現葵花籽！倉鼠全速衝刺過去！';
+          } else {
+            simState.wanderTimer -= dt;
+            const distToTarget = Math.hypot(
+              simState.wanderTarget.x - simState.position.x,
+              simState.wanderTarget.z - simState.position.z
+            );
+            if (simState.wanderTimer <= 0 || distToTarget < 1.2) {
+              pickNewWanderTarget();
+            }
+            desiredDir.set(
+              simState.wanderTarget.x - simState.position.x,
+              0,
+              simState.wanderTarget.z - simState.position.z
+            ).normalize();
+            if (statusText) statusText.textContent = '🐹 正在房間裡開心地四處探索...';
+          }
+        }
+
+        // 平滑轉向與慣性加速度模擬
+        const targetVel = desiredDir.multiplyScalar(targetSpeed);
+        const accelRate = targetSpeed > 0 ? 4.8 : 3.5;
+        simState.velocity.lerp(targetVel, Math.min(1, dt * accelRate));
+      }
+
+      // 計算本幀位移
+      const displacement = simState.velocity.clone().multiplyScalar(dt);
+      simState.position.add(displacement);
+
+      // 邊界牆壁碰撞與彈性反彈
+      const maxCoord = CONFIG.arenaHalfSize - CONFIG.ballRadius;
+      let bounced = false;
+      if (simState.position.x > maxCoord) {
+        simState.position.x = maxCoord;
+        simState.velocity.x = -Math.abs(simState.velocity.x) * 0.72;
+        bounced = true;
+      } else if (simState.position.x < -maxCoord) {
+        simState.position.x = -maxCoord;
+        simState.velocity.x = Math.abs(simState.velocity.x) * 0.72;
+        bounced = true;
+      }
+
+      if (simState.position.z > maxCoord) {
+        simState.position.z = maxCoord;
+        simState.velocity.z = -Math.abs(simState.velocity.z) * 0.72;
+        bounced = true;
+      } else if (simState.position.z < -maxCoord) {
+        simState.position.z = -maxCoord;
+        simState.velocity.z = Math.abs(simState.velocity.z) * 0.72;
+        bounced = true;
+      }
+
+      if (bounced && CONFIG.mode === 'auto') {
+        pickNewWanderTarget();
+      }
+
+      // 檢查是否吃到葵花籽
+      for (let i = sunflowerSeeds.length - 1; i >= 0; i--) {
+        const seed = sunflowerSeeds[i];
+        // 讓場上的葵花籽輕微上下浮動吸引注意
+        seed.mesh.position.y = 0.09 + Math.sin(elapsedTime * 5 + i) * 0.025;
+        seed.mesh.rotation.y += dt * 1.5;
+
+        const dist = Math.hypot(
+          seed.position.x - simState.position.x,
+          seed.position.z - simState.position.z
+        );
+        if (dist < CONFIG.ballRadius * 0.92) {
+          scene.remove(seed.mesh);
+          sunflowerSeeds.splice(i, 1);
+          updateSeedBadge();
+          simState.eatPauseTimer = 0.75;
+          simState.happyHopTimer = 0;
+        }
+      }
+
+      // 實際位移距離 (純滾動物理核心：d = r * theta，保證零打滑)
+      const actualMove = new THREE.Vector3(
+        simState.velocity.x * dt,
+        0,
+        simState.velocity.z * dt
+      );
+      const distanceMoved = actualMove.length();
+      simState.currentSpeed = distanceMoved / Math.max(dt, 0.0001);
+
+      // 更新透明球位置與精準滾動四元數
+      ballGroup.position.copy(simState.position);
+      if (distanceMoved > 0.00001) {
+        // 滾動旋轉軸 = 垂直向上向量 (0,1,0) × 移動方向向量
+        tempAxis.crossVectors(upVec, actualMove).normalize();
+        const rollAngle = distanceMoved / CONFIG.ballRadius;
+        tempQuat.setFromAxisAngle(tempAxis, rollAngle);
+        // 左乘世界座標系旋轉四元數，確保無論球之前怎麼轉，都能沿著地板正確滾動
+        ballGroup.quaternion.premultiply(tempQuat);
+      }
+
+      // ==========================================
+      // 8. 更新內部倉鼠姿態、重心傾斜與四肢奔跑動畫
+      // ==========================================
+      hamsterRig.root.position.copy(simState.position);
+
+      // 計算面向角度與轉彎側傾 (Banking)
+      let angleDiff = 0;
+      if (simState.currentSpeed > 0.15) {
+        const targetAngle = Math.atan2(simState.velocity.x, simState.velocity.z);
+        angleDiff = Math.atan2(
+          Math.sin(targetAngle - simState.facingAngle),
+          Math.cos(targetAngle - simState.facingAngle)
+        );
+        simState.facingAngle += angleDiff * Math.min(1, dt * 10);
+      }
+
+      // 身體前傾 (跑步時在球內壁稍微往前爬升) 與轉彎側傾
+      const targetForwardTilt = THREE.MathUtils.clamp(simState.currentSpeed * 0.042, 0, 0.34);
+      const targetBankAngle = THREE.MathUtils.clamp(-angleDiff * 0.45, -0.28, 0.28);
+      simState.forwardTilt = THREE.MathUtils.lerp(simState.forwardTilt, targetForwardTilt, dt * 8);
+      simState.bankAngle = THREE.MathUtils.lerp(simState.bankAngle, targetBankAngle, dt * 8);
+
+      hamsterRig.tiltPivot.rotation.set(0, simState.facingAngle, 0);
+      // 沿著球內壁弧度往前爬升一點點，看起來像真的在蹬球！
+      hamsterRig.bodyGroup.position.z = Math.sin(simState.forwardTilt) * (CONFIG.ballRadius * 0.65);
+      hamsterRig.bodyGroup.rotation.x = -simState.forwardTilt * 0.85;
+      hamsterRig.bodyGroup.rotation.z = simState.bankAngle;
+
+      // 奔跑週期推進 (與滾球線速度嚴格同步)
+      simState.runCycle += distanceMoved * 7.2;
+
+      const isRunning = simState.currentSpeed > 0.15;
+      const runAmp = THREE.MathUtils.clamp(simState.currentSpeed / 4.5, 0, 1.15);
+
+      // 身體上下律動 (或是吃到葵花籽時的開心小跳躍)
+      const baseFootY = -CONFIG.ballRadius + 0.42 + (1 - Math.cos(simState.forwardTilt)) * 0.45;
+      if (simState.eatPauseTimer > 0) {
+        const hop = Math.abs(Math.sin(simState.happyHopTimer)) * 0.14;
+        hamsterRig.bodyGroup.position.y = baseFootY + hop;
+        // 開心揮舞前腳與點頭
+        hamsterRig.legFL.rotation.x = -0.9 + Math.sin(simState.happyHopTimer * 2) * 0.4;
+        hamsterRig.legFR.rotation.x = -0.9 - Math.sin(simState.happyHopTimer * 2) * 0.4;
+        hamsterRig.headGroup.rotation.x = Math.sin(simState.happyHopTimer * 2) * 0.18;
+      } else if (isRunning) {
+        const bounce = Math.abs(Math.sin(simState.runCycle)) * 0.045 * runAmp;
+        hamsterRig.bodyGroup.position.y = baseFootY + bounce;
+
+        // 四肢對角線奔跑擺動 (左前+右後同相，右前+左後反相)
+        const swingA = Math.sin(simState.runCycle) * 0.88 * runAmp;
+        const swingB = Math.sin(simState.runCycle + Math.PI) * 0.88 * runAmp;
+
+        hamsterRig.legFL.rotation.x = swingA;
+        hamsterRig.legBR.rotation.x = swingA * 0.9;
+        hamsterRig.legFR.rotation.x = swingB;
+        hamsterRig.legBL.rotation.x = swingB * 0.9;
+
+        // 抬腳時微幅上下位移，讓腳掌有踩踏球壁的立體感
+        hamsterRig.legFL.position.y = -0.21 + Math.max(0, -Math.cos(simState.runCycle)) * 0.05 * runAmp;
+        hamsterRig.legFR.position.y = -0.21 + Math.max(0, -Math.cos(simState.runCycle + Math.PI)) * 0.05 * runAmp;
+        hamsterRig.legBL.position.y = -0.21 + Math.max(0, -Math.cos(simState.runCycle + Math.PI)) * 0.05 * runAmp;
+        hamsterRig.legBR.position.y = -0.21 + Math.max(0, -Math.cos(simState.runCycle)) * 0.05 * runAmp;
+
+        // 頭部微幅點動與左右張望
+        hamsterRig.headGroup.rotation.x = Math.cos(simState.runCycle * 2) * 0.04 * runAmp;
+        hamsterRig.headGroup.rotation.y = Math.sin(simState.runCycle * 0.5) * 0.06;
+      } else {
+        // 靜止呼吸與可愛張望
+        const breathe = Math.sin(elapsedTime * 3.5) * 0.012;
+        hamsterRig.bodyGroup.position.y = baseFootY + breathe;
+        hamsterRig.legFL.rotation.x = THREE.MathUtils.lerp(hamsterRig.legFL.rotation.x, 0, dt * 8);
+        hamsterRig.legFR.rotation.x = THREE.MathUtils.lerp(hamsterRig.legFR.rotation.x, 0, dt * 8);
+        hamsterRig.legBL.rotation.x = THREE.MathUtils.lerp(hamsterRig.legBL.rotation.x, 0, dt * 8);
+        hamsterRig.legBR.rotation.x = THREE.MathUtils.lerp(hamsterRig.legBR.rotation.x, 0, dt * 8);
+        hamsterRig.headGroup.rotation.x = Math.sin(elapsedTime * 2) * 0.05;
+        hamsterRig.headGroup.rotation.y = Math.sin(elapsedTime * 1.3) * 0.22;
+      }
+
+      // 耳朵抖動與鬍鬚抽動 (倉鼠超萌細節)
+      const earWiggle = Math.sin(elapsedTime * 14) * 0.06 + Math.sin(simState.runCycle) * 0.08 * runAmp;
+      hamsterRig.earL.rotation.z = -0.38 + earWiggle;
+      hamsterRig.earR.rotation.z = 0.38 - earWiggle;
+
+      const whiskerTwitch = Math.sin(elapsedTime * 22) * 0.08;
+      hamsterRig.whiskersL.forEach((w, idx) => {
+        w.rotation.y = 0.25 + (idx - 1) * 0.12 + whiskerTwitch;
+      });
+      hamsterRig.whiskersR.forEach((w, idx) => {
+        w.rotation.y = -(0.25 + (idx - 1) * 0.12 + whiskerTwitch);
+      });
+
+      // 小尾巴搖擺
+      hamsterRig.tail.rotation.y = Math.sin(elapsedTime * 12) * 0.25;
+
+      // ==========================================
+      // 9. 相機跟隨與 OrbitControls 更新
+      // ==========================================
+      if (CONFIG.cameraMode === 'follow') {
+        // 平滑追蹤滾球中心，同時保留使用者手動拖曳旋轉角度的自由度！
+        const targetDelta = new THREE.Vector3().subVectors(simState.position, controls.target);
+        targetDelta.multiplyScalar(Math.min(1, dt * 6.5));
+        controls.target.add(targetDelta);
+        camera.position.add(targetDelta);
+      }
+
+      controls.update();
+    }
+
+    // ==========================================
+    // 10. UI 事件綁定與互動控制
+    // ==========================================
+    function setupUI() {
+      // 控制面板收合/展開
+      const toggleBtn = document.getElementById('toggle-panel-btn');
+      const toggleLabel = document.getElementById('toggle-panel-label');
+      const controlPanel = document.getElementById('control-panel');
+      let isPanelOpen = true;
+
+      toggleBtn.addEventListener('click', () => {
+        isPanelOpen = !isPanelOpen;
+        if (isPanelOpen) {
+          controlPanel.classList.remove('hidden');
+          toggleLabel.textContent = '隱藏控制';
+        } else {
+          controlPanel.classList.add('hidden');
+          toggleLabel.textContent = '顯示控制';
+        }
+      });
+
+      // 模式切換：自動探索 vs 鍵盤控制
+      const btnAuto = document.getElementById('btn-mode-auto');
+      const btnManual = document.getElementById('btn-mode-manual');
+      const manualHint = document.getElementById('manual-hint');
+      const touchDpad = document.getElementById('touch-dpad');
+
+      function setMode(newMode) {
+        CONFIG.mode = newMode;
+        if (newMode === 'auto') {
+          btnAuto.className = 'py-1.5 px-2 rounded-lg text-xs font-bold bg-amber-600 text-white shadow-sm transition';
+          btnManual.className = 'py-1.5 px-2 rounded-lg text-xs font-bold text-amber-900 hover:bg-white/60 transition';
+          manualHint.classList.add('hidden');
+          touchDpad.classList.add('hidden');
+          pickNewWanderTarget();
+        } else {
+          btnManual.className = 'py-1.5 px-2 rounded-lg text-xs font-bold bg-amber-600 text-white shadow-sm transition';
+          btnAuto.className = 'py-1.5 px-2 rounded-lg text-xs font-bold text-amber-900 hover:bg-white/60 transition';
+          manualHint.classList.remove('hidden');
+          touchDpad.classList.remove('hidden');
+        }
+      }
+
+      btnAuto.addEventListener('click', () => setMode('auto'));
+      btnManual.addEventListener('click', () => setMode('manual'));
+
+      // 視角模式切換：跟隨視角 vs 自由視角
+      const btnCamFollow = document.getElementById('btn-cam-follow');
+      const btnCamFree = document.getElementById('btn-cam-free');
+
+      function setCameraMode(camMode) {
+        CONFIG.cameraMode = camMode;
+        if (camMode === 'follow') {
+          btnCamFollow.className = 'py-1.5 px-2 rounded-lg text-xs font-bold bg-amber-600 text-white shadow-sm transition';
+          btnCamFree.className = 'py-1.5 px-2 rounded-lg text-xs font-bold text-amber-900 hover:bg-white/60 transition';
+        } else {
+          btnCamFree.className = 'py-1.5 px-2 rounded-lg text-xs font-bold bg-amber-600 text-white shadow-sm transition';
+          btnCamFollow.className = 'py-1.5 px-2 rounded-lg text-xs font-bold text-amber-900 hover:bg-white/60 transition';
+        }
+      }
+
+      btnCamFollow.addEventListener('click', () => setCameraMode('follow'));
+      btnCamFree.addEventListener('click', () => setCameraMode('free'));
+
+      // 跑步速度滑桿
+      const speedSlider = document.getElementById('speed-slider');
+      const speedValue = document.getElementById('speed-value');
+      speedSlider.addEventListener('input', (e) => {
+        CONFIG.speedMultiplier = parseFloat(e.target.value);
+        speedValue.textContent = `${CONFIG.speedMultiplier.toFixed(1)}x`;
+      });
+
+      // 滾球顏色選擇
+      const colorBtns = document.querySelectorAll('.color-btn');
+      colorBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const colorKey = btn.getAttribute('data-color');
+          CONFIG.ballColor = colorKey;
+          const theme = BALL_THEMES[colorKey];
+
+          ballShellMat.color.setHex(theme.color);
+          ballShellMat.opacity = theme.opacity;
+          ballRingMat.color.setHex(theme.ring);
+
+          colorBtns.forEach(b => {
+            b.classList.remove('border-amber-600', 'bg-white/80');
+            b.classList.add('border-transparent');
+          });
+          btn.classList.remove('border-transparent');
+          btn.classList.add('border-amber-600', 'bg-white/80');
+        });
+      });
+
+      // 丟葵花籽按鈕
+      const btnDropSeed = document.getElementById('btn-drop-seed');
+      btnDropSeed.addEventListener('click', () => {
+        spawnSunflowerSeed();
+      });
+
+      // 鍵盤監聽 (支援 WASD 與方向鍵，若按下方向鍵自動貼心切換為手動模式)
+      window.addEventListener('keydown', (e) => {
+        if (e.code in keys) {
+          keys[e.code] = true;
+          if (CONFIG.mode !== 'manual') {
+            setMode('manual');
+          }
+        }
+      });
+
+      window.addEventListener('keyup', (e) => {
+        if (e.code in keys) {
+          keys[e.code] = false;
+        }
+      });
+
+      // 手機版虛擬方向鍵綁定
+      document.querySelectorAll('.dpad-btn').forEach(btn => {
+        const keyCode = btn.getAttribute('data-key');
+        const press = (e) => {
+          e.preventDefault();
+          keys[keyCode] = true;
+        };
+        const release = (e) => {
+          e.preventDefault();
+          keys[keyCode] = false;
+        };
+        btn.addEventListener('touchstart', press, { passive: false });
+        btn.addEventListener('touchend', release, { passive: false });
+        btn.addEventListener('mousedown', press);
+        btn.addEventListener('mouseup', release);
+        btn.addEventListener('mouseleave', release);
+      });
+
+      // 視窗大小自適應
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+    }
+
+    // ==========================================
+    // 11. 啟動模擬主迴圈
+    // ==========================================
+    setupLighting();
+    setupEnvironment();
+    createHamsterBall();
+    createCuteHamster();
+    setupUI();
+
+    // 開場先在地上放兩顆葵花籽增加趣味
+    spawnSunflowerSeed(new THREE.Vector3(3.5, 0, 2.5));
+    spawnSunflowerSeed(new THREE.Vector3(-4.0, 0, -3.0));
+
+    const clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = Math.min(clock.getDelta(), 0.05); // 限制最大 dt 防止切換分頁後瞬移
+      const elapsedTime = clock.elapsedTime;
+
+      updateSimulation(dt, elapsedTime);
+      renderer.render(scene, camera);
+    }
+
+    window.onload = () => {
+      animate();
+    };
+  </script>
+</body>
+</html>
