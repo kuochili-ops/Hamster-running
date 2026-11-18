@@ -49,7 +49,7 @@
 
     /* 賽況即時跑馬燈 */
     #ticker-box {
-      flex: 1; max-width: 440px; overflow: hidden; white-space: nowrap;
+      flex: 1; max-width: 480px; overflow: hidden; white-space: nowrap;
       justify-content: center; font-weight: 600; color: #ffe58f;
     }
     #ticker-text {
@@ -151,7 +151,6 @@
       .cam-btn { padding: 4px 7px; font-size: 11px; }
     }
   </style>
-  <!-- Three.js r128 穩定版 CDN -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
@@ -165,7 +164,7 @@
     </div>
 
     <div class="hud-pill" id="ticker-box">
-      <span id="ticker-text">🎙️ 選手已在起跑線就位，請選擇冠軍倉鼠並剪綵開跑！</span>
+      <span id="ticker-text">🎙️ 五隻巨無霸倉鼠球已在起跑線排滿賽道，請押注冠軍並開跑！</span>
     </div>
 
     <div class="hud-pill">
@@ -237,7 +236,7 @@
           setTimeout(() => playTone(783.99, 'triangle', 0.35, 0.25), 240);
         },
         bump() {
-          playTone(180, 'sine', 0.16, 0.22, 65);
+          playTone(150, 'sine', 0.18, 0.24, 55);
         },
         dizzy() {
           playTone(720, 'sine', 0.22, 0.12, 340);
@@ -260,17 +259,17 @@
       { id: 1, num: '2號', name: '雪球麻糬', trait: '迷航型', bodyColor: 0xf7f7f7, bellyColor: 0xffffff, patchColor: 0xd9d9d9, ballTint: 0xa8dadc, uiColor: '#a8dadc' },
       { id: 2, num: '3號', name: '黑糖珍珠', trait: '路障王', bodyColor: 0x4a3b32, bellyColor: 0xdccbb8, patchColor: 0x2b211b, ballTint: 0xffadad, uiColor: '#c98a63' },
       { id: 3, num: '4號', name: '三花豆皮', trait: '貪吃鬼', bodyColor: 0xd98a3c, bellyColor: 0xffffff, patchColor: 0x3b2f2f, ballTint: 0xbde0fe, uiColor: '#e76f51' },
-      { id: 4, num: '5號', name: '芝麻湯圓', trait: '蛇行王', bodyColor: 0x7c828d, bellyColor: 0xf0f2f5, patchColor: 0x4d5259, ballTint: 0xcaffbf, uiColor: '#90be6d' }
+      { id: 4, num: '5號', name: '芝麻湯圓', trait: '干擾王', bodyColor: 0x7c828d, bellyColor: 0xf0f2f5, patchColor: 0x4d5259, ballTint: 0xcaffbf, uiColor: '#90be6d' }
     ];
 
     // ================= 3. Three.js 場景與賽道建構 =================
     const container = document.getElementById('canvas-container');
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x202738);
-    scene.fog = new THREE.Fog(0x202738, 35, 115);
+    scene.fog = new THREE.Fog(0x202738, 38, 125);
 
-    const camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerHeight, 0.1, 200);
-    camera.position.set(0, 7.5, -14);
+    const camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerHeight, 0.1, 220);
+    camera.position.set(0, 8.2, -15);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -284,41 +283,46 @@
     scene.add(hemiLight);
 
     const dirLight = new THREE.DirectionalLight(0xffffff, 0.95);
-    dirLight.position.set(16, 28, 22);
+    dirLight.position.set(16, 30, 22);
     dirLight.castShadow = true;
     dirLight.shadow.mapSize.width = 2048;
     dirLight.shadow.mapSize.height = 2048;
     dirLight.shadow.camera.near = 2;
-    dirLight.shadow.camera.far = 110;
-    const d = 48;
+    dirLight.shadow.camera.far = 120;
+    const d = 52;
     dirLight.shadow.camera.left = -d;
     dirLight.shadow.camera.right = d;
     dirLight.shadow.camera.top = d;
     dirLight.shadow.camera.bottom = -d;
     scene.add(dirLight);
 
-    // 賽道尺寸參數
+    // 賽道與放大球體尺寸參數
+    // 球半徑 1.22 -> 單球直徑 2.44 -> 五球並排總寬 12.20，幾乎填滿 13.0 賽道寬度！
     const TRACK_WIDTH = 13.0;
-    const TRACK_LENGTH = 72.0;
+    const TRACK_LENGTH = 76.0;
     const START_Z = 0;
     const FINISH_Z = 62.0;
-    const BALL_RADIUS = 0.82;
+    const BALL_RADIUS = 1.22;
+    const HAMSTER_SCALE = 1.48;
+    const LANE_SPACING = 2.52;
 
-    // 木紋地板材質 (Canvas 動態繪製)
+    function getLaneX(idx) {
+      return (idx - 2) * LANE_SPACING;
+    }
+
+    // 木紋地板材質
     function createWoodTexture() {
       const c = document.createElement('canvas');
       c.width = 512; c.height = 512;
       const g = c.getContext('2d');
       g.fillStyle = '#d4a373';
       g.fillRect(0, 0, 512, 512);
-      // 木板條紋
       for (let i = 0; i < 8; i++) {
         g.fillStyle = i % 2 === 0 ? 'rgba(188,138,95,0.35)' : 'rgba(230,184,138,0.25)';
         g.fillRect(i * 64, 0, 62, 512);
         g.fillStyle = 'rgba(110,71,38,0.35)';
         g.fillRect(i * 64 + 62, 0, 2, 512);
       }
-      // 跑道虛線
       g.fillStyle = 'rgba(255,255,255,0.45)';
       for (let i = 1; i < 5; i++) {
         const x = (512 / 5) * i;
@@ -334,7 +338,7 @@
     }
 
     const trackFloor = new THREE.Mesh(
-      new THREE.BoxGeometry(TRACK_WIDTH, 0.6, TRACK_LENGTH + 18),
+      new THREE.BoxGeometry(TRACK_WIDTH, 0.6, TRACK_LENGTH + 22),
       new THREE.MeshStandardMaterial({ map: createWoodTexture(), roughness: 0.65 })
     );
     trackFloor.position.set(0, -0.3, TRACK_LENGTH / 2);
@@ -345,33 +349,32 @@
     const wallMat = new THREE.MeshStandardMaterial({ color: 0xf8f9fa, roughness: 0.4 });
     const railStripeMat = new THREE.MeshStandardMaterial({ color: 0xe63946, roughness: 0.4 });
     [-1, 1].forEach(side => {
-      const wall = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.3, TRACK_LENGTH + 18), wallMat);
-      wall.position.set(side * (TRACK_WIDTH / 2 + 0.3), 0.65, TRACK_LENGTH / 2);
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.5, TRACK_LENGTH + 22), wallMat);
+      wall.position.set(side * (TRACK_WIDTH / 2 + 0.3), 0.75, TRACK_LENGTH / 2);
       wall.castShadow = true;
       wall.receiveShadow = true;
       scene.add(wall);
 
-      const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.25, TRACK_LENGTH + 18), railStripeMat);
-      stripe.position.set(side * (TRACK_WIDTH / 2 + 0.3), 1.15, TRACK_LENGTH / 2);
+      const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.28, TRACK_LENGTH + 22), railStripeMat);
+      stripe.position.set(side * (TRACK_WIDTH / 2 + 0.3), 1.32, TRACK_LENGTH / 2);
       scene.add(stripe);
 
-      // 簡易觀眾席看台與歡呼小觀眾
       const stand = new THREE.Mesh(
-        new THREE.BoxGeometry(4.5, 2.2, TRACK_LENGTH + 14),
+        new THREE.BoxGeometry(4.5, 2.4, TRACK_LENGTH + 18),
         new THREE.MeshStandardMaterial({ color: 0x2b3448, roughness: 0.8 })
       );
-      stand.position.set(side * (TRACK_WIDTH / 2 + 3.2), 1.1, TRACK_LENGTH / 2);
+      stand.position.set(side * (TRACK_WIDTH / 2 + 3.2), 1.2, TRACK_LENGTH / 2);
       scene.add(stand);
 
       const spectatorColors = [0xff595e, 0xffca3a, 0x8ac926, 0x1982c4, 0x6a4c93, 0xff9f1c];
-      for (let z = -2; z <= FINISH_Z + 6; z += 2.6) {
+      for (let z = -2; z <= FINISH_Z + 10; z += 2.6) {
         const fan = new THREE.Mesh(
-          new THREE.SphereGeometry(0.38, 10, 10),
+          new THREE.SphereGeometry(0.42, 10, 10),
           new THREE.MeshStandardMaterial({ color: spectatorColors[Math.floor(Math.abs(z * 7)) % spectatorColors.length] })
         );
         fan.position.set(
           side * (TRACK_WIDTH / 2 + 1.8 + (Math.abs(Math.sin(z)) * 1.6)),
-          2.5 + (Math.abs(Math.cos(z)) * 0.4),
+          2.7 + (Math.abs(Math.cos(z)) * 0.4),
           z
         );
         fan.userData.baseY = fan.position.y;
@@ -382,33 +385,33 @@
       }
     });
 
-    // 起跑線與紅絲帶系統
+    // 起跑線與紅絲帶系統 (配合大球半徑往前方調整位置)
     const startLine = new THREE.Mesh(
-      new THREE.PlaneGeometry(TRACK_WIDTH, 0.45),
+      new THREE.PlaneGeometry(TRACK_WIDTH, 0.5),
       new THREE.MeshBasicMaterial({ color: 0xffffff })
     );
     startLine.rotation.x = -Math.PI / 2;
     startLine.position.set(0, 0.01, START_Z);
     scene.add(startLine);
 
-    // 起跑門柱與垂落紅絲帶
+    const RIBBON_Z = START_Z + BALL_RADIUS + 0.35;
     const ribbonGroup = new THREE.Group();
     scene.add(ribbonGroup);
     [-1, 1].forEach(side => {
       const post = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.14, 0.16, 1.8, 12),
+        new THREE.CylinderGeometry(0.16, 0.18, 2.2, 12),
         new THREE.MeshStandardMaterial({ color: 0xffd166, metalness: 0.6, roughness: 0.3 })
       );
-      post.position.set(side * (TRACK_WIDTH / 2 - 0.1), 0.9, START_Z + 1.15);
+      post.position.set(side * (TRACK_WIDTH / 2 - 0.1), 1.1, RIBBON_Z);
       post.castShadow = true;
       scene.add(post);
     });
 
     const RIBBON_SEGS = 28;
-    const ribbonGeo = new THREE.BoxGeometry(TRACK_WIDTH, 0.16, 0.04, RIBBON_SEGS, 1, 1);
+    const ribbonGeo = new THREE.BoxGeometry(TRACK_WIDTH, 0.2, 0.05, RIBBON_SEGS, 1, 1);
     const ribbonMat = new THREE.MeshStandardMaterial({ color: 0xe63946, roughness: 0.35, side: THREE.DoubleSide });
     const ribbonMesh = new THREE.Mesh(ribbonGeo, ribbonMat);
-    ribbonMesh.position.set(0, 0.95, START_Z + 1.15);
+    ribbonMesh.position.set(0, 1.25, RIBBON_Z);
     ribbonMesh.castShadow = true;
     ribbonGroup.add(ribbonMesh);
     const ribbonOrigPos = ribbonGeo.attributes.position.array.slice();
@@ -428,22 +431,21 @@
       return new THREE.CanvasTexture(c);
     }
     const finishLine = new THREE.Mesh(
-      new THREE.PlaneGeometry(TRACK_WIDTH, 1.6),
+      new THREE.PlaneGeometry(TRACK_WIDTH, 1.8),
       new THREE.MeshBasicMaterial({ map: createCheckeredTexture() })
     );
     finishLine.rotation.x = -Math.PI / 2;
     finishLine.position.set(0, 0.015, FINISH_Z);
     scene.add(finishLine);
 
-    // 終點拱門
     const archMat = new THREE.MeshStandardMaterial({ color: 0xff9f1c, roughness: 0.3 });
     [-1, 1].forEach(side => {
-      const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 4.5, 16), archMat);
-      pillar.position.set(side * (TRACK_WIDTH / 2 + 0.1), 2.25, FINISH_Z);
+      const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 5.2, 16), archMat);
+      pillar.position.set(side * (TRACK_WIDTH / 2 + 0.1), 2.6, FINISH_Z);
       scene.add(pillar);
     });
-    const archTop = new THREE.Mesh(new THREE.BoxGeometry(TRACK_WIDTH + 1.0, 0.85, 0.5), archMat);
-    archTop.position.set(0, 4.4, FINISH_Z);
+    const archTop = new THREE.Mesh(new THREE.BoxGeometry(TRACK_WIDTH + 1.1, 0.95, 0.55), archMat);
+    archTop.position.set(0, 5.1, FINISH_Z);
     scene.add(archTop);
 
     // 賽道木頭減速彈跳條
@@ -455,9 +457,9 @@
       { x: 0.0, z: 39, w: 4.2 },
       { x: -2.2, z: 50, w: 3.8 }
     ].forEach(b => {
-      const mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, b.w, 12), bumpMat);
+      const mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, b.w, 12), bumpMat);
       mesh.rotation.z = Math.PI / 2;
-      mesh.position.set(b.x, 0.08, b.z);
+      mesh.position.set(b.x, 0.09, b.z);
       mesh.receiveShadow = true;
       scene.add(mesh);
       bumps.push(b);
@@ -473,21 +475,19 @@
       const isCheese = i % 2 === 0;
       const snackGroup = new THREE.Group();
       if (isCheese) {
-        // 迷你三角形起司塊 (配合倉鼠頭手比例)
-        const cheese = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.09, 3), cheeseMat);
+        const cheese = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.11, 3), cheeseMat);
         cheese.castShadow = true;
         snackGroup.add(cheese);
       } else {
-        // 迷你葵花籽
-        const seed = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), seedMat);
+        const seed = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 8), seedMat);
         seed.scale.set(0.65, 0.45, 1.35);
-        const stripe = new THREE.Mesh(new THREE.SphereGeometry(0.112, 10, 8), seedStripeMat);
+        const stripe = new THREE.Mesh(new THREE.SphereGeometry(0.142, 10, 8), seedStripeMat);
         stripe.scale.set(0.3, 0.48, 1.32);
         snackGroup.add(seed, stripe);
       }
       snackGroup.position.set(
-        (Math.random() - 0.5) * (TRACK_WIDTH - 2.6),
-        0.05,
+        (Math.random() - 0.5) * (TRACK_WIDTH - 3.0),
+        0.06,
         8 + Math.random() * (FINISH_Z - 14)
       );
       snackGroup.rotation.y = Math.random() * Math.PI * 2;
@@ -496,18 +496,19 @@
       snacks.push(snackGroup);
     }
 
-    // 終點後方 3D 頒獎台
+    // 終點後方 3D 頒獎台 (配合大球拉開底座間距，避免三顆大球在台上重疊)
+    const PODIUM_Z = FINISH_Z + 9.5;
     const podiumGroup = new THREE.Group();
-    podiumGroup.position.set(0, 0, FINISH_Z + 6.5);
+    podiumGroup.position.set(0, 0, PODIUM_Z);
     scene.add(podiumGroup);
     const podiumSpecs = [
-      { rank: 1, x: 0, h: 1.4, color: 0xffd700 },
-      { rank: 2, x: -2.4, h: 1.0, color: 0xc0c0c0 },
-      { rank: 3, x: 2.4, h: 0.75, color: 0xcd7f32 }
+      { rank: 1, x: 0, h: 1.5, color: 0xffd700 },
+      { rank: 2, x: -3.2, h: 1.05, color: 0xc0c0c0 },
+      { rank: 3, x: 3.2, h: 0.75, color: 0xcd7f32 }
     ];
     podiumSpecs.forEach(p => {
       const box = new THREE.Mesh(
-        new THREE.BoxGeometry(2.1, p.h, 2.1),
+        new THREE.BoxGeometry(2.8, p.h, 2.8),
         new THREE.MeshStandardMaterial({ color: p.color, metalness: 0.4, roughness: 0.3 })
       );
       box.position.set(p.x, p.h / 2, 0);
@@ -516,15 +517,14 @@
       podiumGroup.add(box);
     });
 
-    // ================= 4. 3D 倉鼠與高透明滾球模型工廠 =================
+    // ================= 4. 放大版 3D 倉鼠與高透明滾球模型工廠 =================
     function createHamsterRacer(cfg, laneIndex) {
       const root = new THREE.Group();
-      const startX = (laneIndex - 2) * 2.35;
-      root.position.set(startX, BALL_RADIUS, START_Z);
+      root.position.set(getLaneX(laneIndex), BALL_RADIUS, START_Z);
 
-      // 外層透明球殼 (使用高可見度菲涅爾高光與赤道接合環，確保清晰可見)
+      // 外層透明球殼
       const ballGroup = new THREE.Group();
-      const shellGeo = new THREE.SphereGeometry(BALL_RADIUS, 32, 24);
+      const shellGeo = new THREE.SphereGeometry(BALL_RADIUS, 36, 28);
       const shellMat = new THREE.MeshPhysicalMaterial({
         color: cfg.ballTint,
         transparent: true,
@@ -536,19 +536,21 @@
       const shellMesh = new THREE.Mesh(shellGeo, shellMat);
       ballGroup.add(shellMesh);
 
-      // 赤道卡榫環 + 透氣孔視覺環，讓球體旋轉極具立體感
+      // 赤道卡榫環 + 交叉環
       const seamRing = new THREE.Mesh(
-        new THREE.TorusGeometry(BALL_RADIUS * 0.995, 0.022, 8, 36),
-        new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.65 })
+        new THREE.TorusGeometry(BALL_RADIUS * 0.995, 0.03, 10, 40),
+        new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.68 })
       );
       const crossRing = seamRing.clone();
       crossRing.rotation.y = Math.PI / 2;
       ballGroup.add(seamRing, crossRing);
       root.add(ballGroup);
 
-      // 內部可愛 3D 倉鼠模型
+      // 內部放大版 3D 倉鼠模型
+      const hamsterBaseY = -BALL_RADIUS + 0.34 * HAMSTER_SCALE;
       const hamsterGroup = new THREE.Group();
-      hamsterGroup.position.set(0, -BALL_RADIUS + 0.34, 0);
+      hamsterGroup.scale.setScalar(HAMSTER_SCALE);
+      hamsterGroup.position.set(0, hamsterBaseY, 0);
       root.add(hamsterGroup);
 
       const bodyMat = new THREE.MeshStandardMaterial({ color: cfg.bodyColor, roughness: 0.75 });
@@ -557,60 +559,51 @@
       const pinkMat = new THREE.MeshStandardMaterial({ color: 0xff8fa3, roughness: 0.5 });
       const eyeMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.1 });
 
-      // 圓滾滾身體
-      const body = new THREE.Mesh(new THREE.SphereGeometry(0.32, 20, 16), bodyMat);
+      const body = new THREE.Mesh(new THREE.SphereGeometry(0.32, 22, 18), bodyMat);
       body.scale.set(0.95, 0.9, 1.25);
       body.castShadow = true;
       hamsterGroup.add(body);
 
-      // 白色肚肚
-      const belly = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 12), bellyMat);
+      const belly = new THREE.Mesh(new THREE.SphereGeometry(0.28, 18, 14), bellyMat);
       belly.position.set(0, -0.06, 0.04);
       belly.scale.set(0.88, 0.82, 1.15);
       hamsterGroup.add(belly);
 
-      // 背部花紋斑塊
-      const backPatch = new THREE.Mesh(new THREE.SphereGeometry(0.24, 14, 12), patchMat);
+      const backPatch = new THREE.Mesh(new THREE.SphereGeometry(0.24, 16, 14), patchMat);
       backPatch.position.set(0, 0.14, -0.05);
       backPatch.scale.set(0.85, 0.65, 1.1);
       hamsterGroup.add(backPatch);
 
-      // 頭部與鼓鼓腮幫子
       const headGroup = new THREE.Group();
       headGroup.position.set(0, 0.14, 0.32);
       hamsterGroup.add(headGroup);
 
-      const head = new THREE.Mesh(new THREE.SphereGeometry(0.23, 18, 16), bodyMat);
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.23, 20, 18), bodyMat);
       headGroup.add(head);
 
       [-1, 1].forEach(side => {
-        // 鼓鼓腮幫子
-        const cheek = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 12), bellyMat);
+        const cheek = new THREE.Mesh(new THREE.SphereGeometry(0.11, 14, 14), bellyMat);
         cheek.position.set(side * 0.13, -0.04, 0.08);
         headGroup.add(cheek);
 
-        // 圓耳朵
-        const ear = new THREE.Mesh(new THREE.SphereGeometry(0.075, 12, 12), pinkMat);
+        const ear = new THREE.Mesh(new THREE.SphereGeometry(0.075, 14, 14), pinkMat);
         ear.scale.set(1, 1, 0.45);
         ear.position.set(side * 0.16, 0.18, -0.03);
         headGroup.add(ear);
 
-        // 黑豆豆大眼睛
-        const eye = new THREE.Mesh(new THREE.SphereGeometry(0.036, 10, 10), eyeMat);
+        const eye = new THREE.Mesh(new THREE.SphereGeometry(0.036, 12, 12), eyeMat);
         eye.position.set(side * 0.1, 0.05, 0.19);
         headGroup.add(eye);
       });
 
-      // 粉紅小鼻子與小尾巴
-      const nose = new THREE.Mesh(new THREE.SphereGeometry(0.032, 10, 10), pinkMat);
+      const nose = new THREE.Mesh(new THREE.SphereGeometry(0.032, 12, 12), pinkMat);
       nose.position.set(0, 0.0, 0.23);
       headGroup.add(nose);
 
-      const tail = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 10), bellyMat);
+      const tail = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 12), bellyMat);
       tail.position.set(0, 0.02, -0.39);
       hamsterGroup.add(tail);
 
-      // 四隻小腳掌
       const paws = [];
       [
         { x: -0.16, y: -0.22, z: 0.2 },
@@ -618,14 +611,14 @@
         { x: -0.17, y: -0.22, z: -0.2 },
         { x: 0.17, y: -0.22, z: -0.2 }
       ].forEach(p => {
-        const paw = new THREE.Mesh(new THREE.SphereGeometry(0.065, 10, 10), pinkMat);
+        const paw = new THREE.Mesh(new THREE.SphereGeometry(0.065, 12, 12), pinkMat);
         paw.scale.set(0.9, 0.65, 1.3);
         paw.position.set(p.x, p.y, p.z);
         hamsterGroup.add(paw);
         paws.push(paw);
       });
 
-      // 頭頂暈眩環繞小星星群組
+      // 頭頂暈眩環繞小星星
       const dizzyGroup = new THREE.Group();
       dizzyGroup.position.set(0, 0.56, 0.25);
       dizzyGroup.visible = false;
@@ -638,27 +631,33 @@
       }
       hamsterGroup.add(dizzyGroup);
 
-      // 頭頂懸浮號碼牌 Sprite
+      // 頭頂懸浮號碼牌 Sprite (可動態更新衝線名次標記)
       const badgeCanvas = document.createElement('canvas');
-      badgeCanvas.width = 128; badgeCanvas.height = 64;
-      const bg = badgeCanvas.getContext('2d');
-      bg.fillStyle = 'rgba(18, 22, 33, 0.8)';
-      bg.beginPath();
-      bg.roundRect(14, 10, 100, 44, 22);
-      bg.fill();
-      bg.strokeStyle = cfg.uiColor;
-      bg.lineWidth = 4;
-      bg.stroke();
-      bg.fillStyle = '#ffffff';
-      bg.font = 'bold 26px sans-serif';
-      bg.textAlign = 'center';
-      bg.textBaseline = 'middle';
-      bg.fillText(`${cfg.num}`, 64, 33);
-
+      badgeCanvas.width = 160; badgeCanvas.height = 64;
       const badgeTex = new THREE.CanvasTexture(badgeCanvas);
+
+      function updateBadgeText(label) {
+        const bg = badgeCanvas.getContext('2d');
+        bg.clearRect(0, 0, 160, 64);
+        bg.fillStyle = 'rgba(18, 22, 33, 0.84)';
+        bg.beginPath();
+        bg.roundRect(10, 10, 140, 44, 22);
+        bg.fill();
+        bg.strokeStyle = cfg.uiColor;
+        bg.lineWidth = 4;
+        bg.stroke();
+        bg.fillStyle = '#ffffff';
+        bg.font = 'bold 24px sans-serif';
+        bg.textAlign = 'center';
+        bg.textBaseline = 'middle';
+        bg.fillText(label, 80, 33);
+        badgeTex.needsUpdate = true;
+      }
+      updateBadgeText(cfg.num);
+
       const badgeSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: badgeTex, transparent: true }));
-      badgeSprite.scale.set(0.95, 0.48, 1);
-      badgeSprite.position.set(0, BALL_RADIUS + 0.45, 0);
+      badgeSprite.scale.set(1.35, 0.54, 1);
+      badgeSprite.position.set(0, BALL_RADIUS + 0.55, 0);
       root.add(badgeSprite);
 
       scene.add(root);
@@ -668,16 +667,18 @@
         root,
         ballGroup,
         hamsterGroup,
+        hamsterBaseY,
         headGroup,
         paws,
         dizzyGroup,
+        updateBadgeText,
         pos: root.position,
         vel: new THREE.Vector3(0, 0, 0),
-        heading: 0, // 0 = 朝向 +Z 終點
-        state: 'IDLE', // IDLE, RUN, TURBO, REVERSE, GROOM, SNACK, DIZZY, FINISHED
+        heading: 0,
+        state: 'IDLE', // IDLE, RUN, TURBO, REVERSE, GROOM, SNACK, DIZZY, SABOTAGE
         stateTimer: 0,
         targetSnack: null,
-        finishOrder: null,
+        finishOrder: null, // 一旦衝過終點即鎖定名次，但仍留在場上亂跑干擾！
         runPhase: Math.random() * 10
       };
     }
@@ -689,9 +690,9 @@
     scene.add(confettiGroup);
     const confettiPieces = [];
     const confettiColors = [0xff595e, 0xffca3a, 0x8ac926, 0x1982c4, 0xff9f1c, 0xffffff];
-    for (let i = 0; i < 90; i++) {
+    for (let i = 0; i < 95; i++) {
       const m = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.18, 0.1),
+        new THREE.PlaneGeometry(0.22, 0.12),
         new THREE.MeshBasicMaterial({ color: confettiColors[i % confettiColors.length], side: THREE.DoubleSide })
       );
       m.visible = false;
@@ -707,11 +708,11 @@
       confettiPieces.forEach(p => {
         p.mesh.visible = true;
         p.mesh.position.set(
-          (Math.random() - 0.5) * 8,
-          3.5 + Math.random() * 3.5,
-          FINISH_Z + 6.5 + (Math.random() - 0.5) * 4
+          (Math.random() - 0.5) * 10,
+          4.0 + Math.random() * 4.0,
+          PODIUM_Z + (Math.random() - 0.5) * 5
         );
-        p.vel.set((Math.random() - 0.5) * 2.5, -1.2 - Math.random() * 1.8, (Math.random() - 0.5) * 2.5);
+        p.vel.set((Math.random() - 0.5) * 2.8, -1.2 - Math.random() * 1.8, (Math.random() - 0.5) * 2.8);
         p.rotVel.set(Math.random() * 6, Math.random() * 6, Math.random() * 6);
       });
     }
@@ -719,7 +720,7 @@
     // ================= 6. UI 初始化與互動綁定 =================
     let gameState = 'BETTING'; // BETTING, RACING, PODIUM
     let selectedBetId = 0;
-    let cameraMode = 'broadcast'; // broadcast, hero, aerial
+    let cameraMode = 'broadcast';
     let ribbonDropProgress = 0;
     let finishCounter = 0;
     let lastTickerTime = 0;
@@ -727,7 +728,7 @@
     const tickerTextEl = document.getElementById('ticker-text');
     function announce(msg, force = false) {
       const now = performance.now();
-      if (!force && now - lastTickerTime < 1400) return;
+      if (!force && now - lastTickerTime < 1300) return;
       lastTickerTime = now;
       tickerTextEl.textContent = msg;
       tickerTextEl.style.animation = 'none';
@@ -735,7 +736,6 @@
       tickerTextEl.style.animation = 'pulseText 0.35s ease';
     }
 
-    // 建立迷你進度條圓點 & 押注卡片
     const miniTrackEl = document.getElementById('mini-track');
     const cardsContainer = document.getElementById('hamster-cards');
     const trackDots = [];
@@ -764,7 +764,6 @@
       cardsContainer.appendChild(card);
     });
 
-    // 視角切換
     document.querySelectorAll('.cam-btn[data-cam]').forEach(btn => {
       btn.addEventListener('click', () => {
         cameraMode = btn.dataset.cam;
@@ -773,14 +772,12 @@
       });
     });
 
-    // 音效開關
     const muteBtn = document.getElementById('mute-btn');
     muteBtn.addEventListener('click', () => {
       const isMuted = SoundFX.toggleMute();
       muteBtn.textContent = isMuted ? '🔇' : '🔊';
     });
 
-    // 按下 START 剪綵開跑
     document.getElementById('start-btn').addEventListener('click', () => {
       if (gameState !== 'BETTING') return;
       gameState = 'RACING';
@@ -788,16 +785,15 @@
       finishCounter = 0;
       document.getElementById('bet-panel').classList.add('hidden');
       SoundFX.startHorn();
-      announce('✂️ 紅絲帶落地！五隻倉鼠瘋狂開跑啦！！', true);
+      announce('✂️ 紅絲帶落地！五顆巨無霸倉鼠球擠在一起瘋狂開跑！！', true);
 
       racers.forEach(r => {
         r.state = 'RUN';
-        r.stateTimer = 1.0 + Math.random() * 1.5;
-        r.vel.z = 3.5 + Math.random() * 2.0;
+        r.stateTimer = 0.9 + Math.random() * 1.4;
+        r.vel.z = 3.6 + Math.random() * 2.2;
       });
     });
 
-    // 再比一場重置
     document.getElementById('restart-btn').addEventListener('click', () => {
       gameState = 'BETTING';
       ribbonDropProgress = 0;
@@ -805,42 +801,55 @@
       document.getElementById('podium-overlay').style.display = 'none';
       document.getElementById('bet-panel').classList.remove('hidden');
 
-      // 重置紅絲帶幾何
       const posAttr = ribbonGeo.attributes.position;
       for (let i = 0; i < posAttr.array.length; i++) posAttr.array[i] = ribbonOrigPos[i];
       posAttr.needsUpdate = true;
-      ribbonMesh.position.set(0, 0.95, START_Z + 1.15);
+      ribbonMesh.position.set(0, 1.25, RIBBON_Z);
 
-      // 重置零食
       snacks.forEach(s => {
         s.visible = true;
         s.userData.active = true;
         s.position.set(
-          (Math.random() - 0.5) * (TRACK_WIDTH - 2.6),
-          0.05,
+          (Math.random() - 0.5) * (TRACK_WIDTH - 3.0),
+          0.06,
           8 + Math.random() * (FINISH_Z - 14)
         );
       });
 
-      // 重置紙花
       confettiPieces.forEach(p => { p.mesh.visible = false; });
 
-      // 重置五隻倉鼠
       racers.forEach((r, idx) => {
-        r.pos.set((idx - 2) * 2.35, BALL_RADIUS, START_Z);
+        r.pos.set(getLaneX(idx), BALL_RADIUS, START_Z);
         r.vel.set(0, 0, 0);
         r.heading = 0;
         r.state = 'IDLE';
         r.finishOrder = null;
         r.dizzyGroup.visible = false;
+        r.hamsterGroup.position.y = r.hamsterBaseY;
         r.hamsterGroup.rotation.set(0, 0, 0);
+        r.updateBadgeText(r.cfg.num);
       });
 
-      announce('🎙️ 新一輪賽前押注開始！請選擇你支持的倉鼠！', true);
+      announce('🎙️ 新一輪賽前押注開始！請選擇你支持的冠軍倉鼠！', true);
     });
 
-    // ================= 7. 高混亂 AI 與物理更新邏輯 =================
+    // ================= 7. 高混亂 AI (含過線後回頭干擾) 與物理更新 =================
     function pickNextChaosState(r) {
+      // 【新機制】已經衝過終點線的倉鼠：不會乖乖停下，而是有極高機率掉頭回賽道干擾其他選手！
+      if (r.finishOrder !== null) {
+        const unFinished = racers.filter(o => o.finishOrder === null);
+        if (unFinished.length > 0 && Math.random() < 0.72) {
+          r.state = 'SABOTAGE';
+          r.stateTimer = 1.6 + Math.random() * 1.4;
+          announce(`😈 已完賽的 ${r.cfg.num}${r.cfg.name} 竟然掉頭衝回終點線前干擾對手！`);
+          return;
+        } else {
+          r.state = 'GROOM';
+          r.stateTimer = 1.2;
+          return;
+        }
+      }
+
       const roll = Math.random();
       if (roll < 0.28) {
         r.state = 'RUN';
@@ -856,11 +865,10 @@
       } else if (roll < 0.82) {
         r.state = 'GROOM';
         r.stateTimer = 1.3 + Math.random() * 1.2;
-        announce(`💤 ${r.cfg.num}${r.cfg.name} 停在路中央發呆洗臉變成路障！`);
+        announce(`💤 ${r.cfg.num}${r.cfg.name} 停在路中央發呆洗臉變成大路障！`);
       } else {
-        // 尋找附近零食
         let nearest = null;
-        let minDist = 11.0;
+        let minDist = 11.5;
         snacks.forEach(s => {
           if (!s.userData.active) return;
           const d = r.pos.distanceTo(s.position);
@@ -882,12 +890,10 @@
 
     const rollAxis = new THREE.Vector3();
     const rollQuat = new THREE.Quaternion();
-    const upVec = new THREE.Vector3(0, 1, 0);
 
     function updateSimulation(dt) {
       const time = performance.now() * 0.001;
 
-      // 觀眾席上下跳動加油
       if (scene.userData.fans) {
         const cheerAmp = gameState === 'RACING' ? 0.14 : (gameState === 'PODIUM' ? 0.26 : 0.04);
         scene.userData.fans.forEach(fan => {
@@ -895,17 +901,17 @@
         });
       }
 
-      // 紅絲帶垂落到地上動畫
+      // 紅絲帶垂落動畫
       if (ribbonDropProgress > 0 && ribbonDropProgress < 1) {
         ribbonDropProgress = Math.min(1, ribbonDropProgress + dt * 2.4);
         const posAttr = ribbonGeo.attributes.position;
         for (let i = 0; i < posAttr.count; i++) {
           const ox = ribbonOrigPos[i * 3];
           const oy = ribbonOrigPos[i * 3 + 1];
-          const normX = ox / (TRACK_WIDTH / 2); // -1 to 1
+          const normX = ox / (TRACK_WIDTH / 2);
           const sag = Math.cos(normX * Math.PI * 0.5);
-          const dropY = -0.92 * ribbonDropProgress * (0.35 + 0.65 * sag);
-          const curlZ = 0.35 * ribbonDropProgress * sag * Math.sin(normX * 4);
+          const dropY = -1.2 * ribbonDropProgress * (0.35 + 0.65 * sag);
+          const curlZ = 0.42 * ribbonDropProgress * sag * Math.sin(normX * 4);
           posAttr.setY(i, oy + dropY);
           posAttr.setZ(i, curlZ);
         }
@@ -914,54 +920,65 @@
 
       if (gameState === 'RACING') {
         racers.forEach(r => {
-          if (r.state === 'FINISHED') return;
-
           r.stateTimer -= dt;
           if (r.stateTimer <= 0) {
             r.dizzyGroup.visible = false;
             pickNextChaosState(r);
           }
 
-          // 依據狀態決定目標速度向量
           let desiredVx = 0;
           let desiredVz = 0;
           let targetHeading = 0;
 
           if (r.state === 'RUN') {
-            desiredVz = 4.6;
-            desiredVx = Math.sin(time * 2.5 + r.cfg.id * 2) * 1.4;
+            desiredVz = 4.8;
+            desiredVx = Math.sin(time * 2.5 + r.cfg.id * 2) * 1.5;
             targetHeading = Math.atan2(desiredVx, desiredVz);
           } else if (r.state === 'TURBO') {
-            desiredVz = 8.4;
-            desiredVx = Math.cos(time * 4 + r.cfg.id) * 2.2;
+            desiredVz = 8.6;
+            desiredVx = Math.cos(time * 4 + r.cfg.id) * 2.3;
             targetHeading = Math.atan2(desiredVx, desiredVz);
           } else if (r.state === 'REVERSE') {
-            desiredVz = -4.2;
-            desiredVx = Math.sin(time * 3 + r.cfg.id) * 1.8;
+            desiredVz = -4.4;
+            desiredVx = Math.sin(time * 3 + r.cfg.id) * 1.9;
             targetHeading = Math.atan2(desiredVx, desiredVz);
           } else if (r.state === 'ZIGZAG') {
-            desiredVz = 3.8;
-            desiredVx = Math.sin(time * 6.5 + r.cfg.id * 1.7) * 5.2;
+            desiredVz = 4.0;
+            desiredVx = Math.sin(time * 6.5 + r.cfg.id * 1.7) * 5.4;
             targetHeading = Math.atan2(desiredVx, desiredVz);
           } else if (r.state === 'GROOM') {
             desiredVx = 0;
             desiredVz = 0;
+          } else if (r.state === 'SABOTAGE') {
+            // 已完賽倉鼠鎖定最接近終點線的未完賽對手，回頭迎面撞擊或橫向擋路！
+            const unFinished = racers.filter(o => o.finishOrder === null);
+            if (unFinished.length > 0) {
+              const target = unFinished.reduce((best, o) => (o.pos.z > best.pos.z ? o : best), unFinished[0]);
+              const dx = target.pos.x - r.pos.x;
+              const dz = target.pos.z - r.pos.z;
+              const dist = Math.max(0.1, Math.hypot(dx, dz));
+              desiredVx = (dx / dist) * 6.4;
+              desiredVz = (dz / dist) * 6.4;
+              targetHeading = Math.atan2(desiredVx, desiredVz);
+            } else {
+              desiredVz = -3.0;
+              targetHeading = Math.PI;
+            }
           } else if (r.state === 'SNACK' && r.targetSnack && r.targetSnack.userData.active) {
             const dx = r.targetSnack.position.x - r.pos.x;
             const dz = r.targetSnack.position.z - r.pos.z;
             const dist = Math.hypot(dx, dz);
-            if (dist < 0.28) {
-              // 吃到迷你零食！開心跳躍並切換暴衝
+            if (dist < 0.42) {
               r.targetSnack.userData.active = false;
               r.targetSnack.visible = false;
-              r.vel.y = 3.4;
+              r.vel.y = 3.6;
               r.state = 'TURBO';
               r.stateTimer = 1.4;
               SoundFX.nibble();
               announce(`😋 ${r.cfg.num}${r.cfg.name} 啃掉${r.targetSnack.userData.type}精力充沛！`);
             } else {
-              desiredVx = (dx / dist) * 5.2;
-              desiredVz = (dz / dist) * 5.2;
+              desiredVx = (dx / dist) * 5.4;
+              desiredVz = (dz / dist) * 5.4;
               targetHeading = Math.atan2(desiredVx, desiredVz);
             }
           } else if (r.state === 'DIZZY') {
@@ -970,13 +987,11 @@
             r.heading += dt * 11;
           }
 
-          // 平滑套用水平加速度 (保留物理慣性)
           if (r.state !== 'DIZZY') {
-            const accel = r.state === 'GROOM' ? 5.0 : 3.2;
+            const accel = r.state === 'GROOM' ? 5.0 : 3.4;
             r.vel.x += (desiredVx - r.vel.x) * Math.min(1, dt * accel);
             r.vel.z += (desiredVz - r.vel.z) * Math.min(1, dt * accel);
 
-            // 平滑轉向
             let diff = targetHeading - r.heading;
             while (diff > Math.PI) diff -= Math.PI * 2;
             while (diff < -Math.PI) diff += Math.PI * 2;
@@ -986,7 +1001,7 @@
             r.vel.z *= 0.96;
           }
 
-          // 垂直重力與地板彈跳
+          // 重力與地板彈跳
           r.vel.y -= 16.0 * dt;
           r.pos.x += r.vel.x * dt;
           r.pos.y += r.vel.y * dt;
@@ -1001,8 +1016,8 @@
             }
           }
 
-          // 賽道邊界護欄與起點後方阻擋
-          const maxX = TRACK_WIDTH / 2 - BALL_RADIUS - 0.05;
+          // 賽道邊界護欄與前後端牆阻擋 (確保過線倉鼠不會跑出舞台外)
+          const maxX = TRACK_WIDTH / 2 - BALL_RADIUS - 0.04;
           if (r.pos.x < -maxX) {
             r.pos.x = -maxX;
             r.vel.x = Math.abs(r.vel.x) * 0.85;
@@ -1012,16 +1027,21 @@
             r.vel.x = -Math.abs(r.vel.x) * 0.85;
             SoundFX.bump();
           }
-          if (r.pos.z < -2.2) {
-            r.pos.z = -2.2;
+          if (r.pos.z < -2.6) {
+            r.pos.z = -2.6;
             r.vel.z = Math.abs(r.vel.z) * 0.8;
+          }
+          const maxZ = FINISH_Z + 5.5;
+          if (r.pos.z > maxZ) {
+            r.pos.z = maxZ;
+            r.vel.z = -Math.abs(r.vel.z) * 0.85;
           }
 
           // 木頭減速彈跳條檢測
           bumps.forEach(b => {
-            if (Math.abs(r.pos.z - b.z) < 0.38 && Math.abs(r.pos.x - b.x) < b.w / 2 + 0.3) {
-              if (r.pos.y <= BALL_RADIUS + 0.08) {
-                r.vel.y = 3.8;
+            if (Math.abs(r.pos.z - b.z) < 0.45 && Math.abs(r.pos.x - b.x) < b.w / 2 + 0.4) {
+              if (r.pos.y <= BALL_RADIUS + 0.1) {
+                r.vel.y = 4.0;
                 r.vel.z *= 0.72;
                 SoundFX.bump();
               }
@@ -1041,41 +1061,43 @@
           // 倉鼠身體與四肢動畫
           r.hamsterGroup.rotation.y = r.heading;
           if (r.state === 'GROOM') {
-            // 發呆坐起搓臉洗鬍鬚
             r.hamsterGroup.rotation.x = -0.35;
             r.paws[0].position.set(-0.08, 0.06, 0.36 + Math.sin(time * 22) * 0.04);
             r.paws[1].position.set(0.08, 0.06, 0.36 - Math.sin(time * 22) * 0.04);
           } else {
             r.hamsterGroup.rotation.x = Math.min(0.28, speed2D * 0.035);
-            r.runPhase += speed2D * dt * 4.5;
+            r.runPhase += speed2D * dt * 4.2;
             r.paws[0].position.set(-0.16, -0.22 + Math.max(0, Math.sin(r.runPhase)) * 0.07, 0.2 + Math.cos(r.runPhase) * 0.08);
             r.paws[3].position.set(0.17, -0.22 + Math.max(0, Math.sin(r.runPhase)) * 0.07, -0.2 + Math.cos(r.runPhase) * 0.08);
             r.paws[1].position.set(0.16, -0.22 + Math.max(0, -Math.sin(r.runPhase)) * 0.07, 0.2 - Math.cos(r.runPhase) * 0.08);
             r.paws[2].position.set(-0.17, -0.22 + Math.max(0, -Math.sin(r.runPhase)) * 0.07, -0.2 - Math.cos(r.runPhase) * 0.08);
           }
 
-          // 檢查衝過終點線
+          // 首次衝過終點線判定 (紀錄名次但保持物理與回頭干擾能力！)
           if (r.pos.z >= FINISH_Z && r.finishOrder === null) {
             finishCounter++;
             r.finishOrder = finishCounter;
-            r.state = 'FINISHED';
-            r.dizzyGroup.visible = false;
+            const medals = ['🥇1st', '🥈2nd', '🥉3rd'];
+            r.updateBadgeText(`${medals[finishCounter - 1] || ''} ${r.cfg.num}`);
             SoundFX.nibble();
             announce(`🏁 第 ${finishCounter} 名衝線：${r.cfg.num} ${r.cfg.name}！`, true);
 
             if (finishCounter >= 3) {
               enterPodiumPhase();
+            } else {
+              // 衝線後立刻觸發回頭干擾狀態
+              r.state = 'SABOTAGE';
+              r.stateTimer = 2.0;
             }
           }
         });
 
-        // 球體間高彈性碰撞與暈眩判定
+        // 球體間高彈性碰撞 (包含已過終點回頭的倉鼠與未完賽倉鼠之間的衝撞！)
         const minDist = BALL_RADIUS * 2;
         for (let i = 0; i < racers.length; i++) {
           for (let j = i + 1; j < racers.length; j++) {
             const a = racers[i];
             const b = racers[j];
-            if (a.state === 'FINISHED' || b.state === 'FINISHED') continue;
 
             const dx = b.pos.x - a.pos.x;
             const dz = b.pos.z - a.pos.z;
@@ -1095,20 +1117,23 @@
               const impactSpeed = -(relVx * nx + relVz * nz);
 
               if (impactSpeed > 0) {
-                const impulse = impactSpeed * 1.25;
+                const impulse = impactSpeed * 1.28;
                 a.vel.x -= nx * impulse;
                 a.vel.z -= nz * impulse;
                 b.vel.x += nx * impulse;
                 b.vel.z += nz * impulse;
 
-                // 猛烈撞擊時整顆彈起並眼冒金星！
-                if (impactSpeed > 3.2) {
+                if (impactSpeed > 3.0) {
                   const victim = Math.random() < 0.5 ? a : b;
-                  victim.vel.y = 4.2;
+                  victim.vel.y = 4.4;
                   victim.state = 'DIZZY';
                   victim.stateTimer = 1.25;
                   SoundFX.dizzy();
-                  announce(`💥 碰！${a.cfg.num}與${b.cfg.num}猛烈對撞，${victim.cfg.name}眼冒金星！`);
+                  if (a.finishOrder !== null || b.finishOrder !== null) {
+                    announce(`🚨 惡意阻擋！已完賽的選手回頭把 ${victim.cfg.num}${victim.cfg.name} 撞到眼冒金星！`);
+                  } else {
+                    announce(`💥 碰！${a.cfg.num}與${b.cfg.num}巨球對撞，${victim.cfg.name}眼冒金星！`);
+                  }
                 } else {
                   SoundFX.bump();
                 }
@@ -1128,7 +1153,7 @@
       if (gameState === 'PODIUM') {
         racers.forEach(r => {
           if (r.finishOrder && r.finishOrder <= 3) {
-            r.hamsterGroup.position.y = (-BALL_RADIUS + 0.34) + Math.abs(Math.sin(time * 7 + r.finishOrder)) * 0.16;
+            r.hamsterGroup.position.y = r.hamsterBaseY + Math.abs(Math.sin(time * 7 + r.finishOrder)) * 0.22;
             r.hamsterGroup.rotation.y = Math.PI + Math.sin(time * 3 + r.finishOrder) * 0.25;
           }
         });
@@ -1137,7 +1162,7 @@
           p.mesh.position.addScaledVector(p.vel, dt);
           p.mesh.rotation.x += p.rotVel.x * dt;
           p.mesh.rotation.y += p.rotVel.y * dt;
-          if (p.mesh.position.y < 0.1) p.mesh.position.y = 5.5;
+          if (p.mesh.position.y < 0.1) p.mesh.position.y = 6.2;
         });
       }
     }
@@ -1147,7 +1172,6 @@
       SoundFX.fanfare();
       launchConfetti();
 
-      // 若還有未衝線者，依目前距離補足排名
       const sorted = [...racers].sort((a, b) => {
         if (a.finishOrder && b.finishOrder) return a.finishOrder - b.finishOrder;
         if (a.finishOrder) return -1;
@@ -1157,11 +1181,10 @@
 
       sorted.forEach((r, idx) => { r.finishOrder = idx + 1; });
 
-      // 將前三名移上頒獎台
       const top3 = sorted.slice(0, 3);
       top3.forEach((r, idx) => {
         const spec = podiumSpecs[idx];
-        r.pos.set(spec.x, spec.h + BALL_RADIUS, FINISH_Z + 6.5);
+        r.pos.set(spec.x, spec.h + BALL_RADIUS, PODIUM_Z);
         r.vel.set(0, 0, 0);
         r.dizzyGroup.visible = false;
       });
@@ -1189,27 +1212,28 @@
       const time = performance.now() * 0.001;
 
       if (gameState === 'BETTING') {
-        camTargetPos.set(Math.sin(time * 0.4) * 3.5, 4.6, -7.8);
-        camLookAt.set(0, 0.9, 3.5);
+        camTargetPos.set(Math.sin(time * 0.4) * 3.8, 5.4, -8.8);
+        camLookAt.set(0, 1.2, 3.5);
       } else if (gameState === 'PODIUM') {
-        camTargetPos.set(Math.sin(time * 0.5) * 2.5, 4.2, FINISH_Z - 1.5);
-        camLookAt.set(0, 1.8, FINISH_Z + 6.5);
+        camTargetPos.set(Math.sin(time * 0.5) * 2.8, 5.0, PODIUM_Z - 9.2);
+        camLookAt.set(0, 2.2, PODIUM_Z);
       } else {
-        // RACING 轉播三模式
-        const leader = racers.reduce((best, r) => (r.pos.z > best.pos.z ? r : best), racers[0]);
+        // 轉播焦點鎖定「尚未衝線的領先者」，這樣能清楚看到已過線倉鼠回頭干擾搶前三名的精彩畫面！
+        const activeRacers = racers.filter(r => r.finishOrder === null);
+        const focusPool = activeRacers.length > 0 ? activeRacers : racers;
+        const leader = focusPool.reduce((best, r) => (r.pos.z > best.pos.z ? r : best), focusPool[0]);
         const hero = racers[selectedBetId];
 
         if (cameraMode === 'hero') {
-          camTargetPos.set(hero.pos.x * 0.75, 4.2, hero.pos.z - 6.8);
-          camLookAt.set(hero.pos.x, 0.8, hero.pos.z + 5.5);
+          camTargetPos.set(hero.pos.x * 0.75, 4.8, hero.pos.z - 7.8);
+          camLookAt.set(hero.pos.x, 1.1, hero.pos.z + 5.5);
         } else if (cameraMode === 'aerial') {
           const avgZ = racers.reduce((sum, r) => sum + r.pos.z, 0) / racers.length;
-          camTargetPos.set(0, 17.5, avgZ - 9.5);
-          camLookAt.set(0, 0.5, avgZ + 6.0);
+          camTargetPos.set(0, 19.5, avgZ - 10.5);
+          camLookAt.set(0, 0.8, avgZ + 6.0);
         } else {
-          // 預設轉播追焦：鎖定領先集團並帶點電視轉播搖臂感
-          camTargetPos.set(Math.sin(time * 0.45) * 4.2, 5.4, leader.pos.z - 8.2);
-          camLookAt.set(leader.pos.x * 0.4, 0.8, leader.pos.z + 4.5);
+          camTargetPos.set(Math.sin(time * 0.45) * 4.5, 6.2, leader.pos.z - 9.2);
+          camLookAt.set(leader.pos.x * 0.4, 1.1, leader.pos.z + 4.5);
         }
       }
 
